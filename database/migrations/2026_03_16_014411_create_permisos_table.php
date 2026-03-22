@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('nombre', 50);
              $table->string('descripcion', 250);
-            $table->bigInteger('clave');
+             $table->string('clave', 100)->change();
         });
     }
 
