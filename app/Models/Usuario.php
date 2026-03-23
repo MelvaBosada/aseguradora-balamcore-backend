@@ -2,22 +2,23 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
 
-class Usuario extends Model
+class Usuario extends Authenticatable
 {
+    use HasApiTokens;
+
+    public $timestamps = false;
     protected $table = 'usuarios';
 
     protected $fillable = [
-        'id_aseguradora',
-        'id_rol',
         'correo',
         'contrasena',
+        'id_rol',
+        'id_aseguradora',
         'es_superadmin',
     ];
 
-    // Ocultar contraseña en respuestas JSON
-    protected $hidden = [
-        'contrasena',
-    ];
+    protected $hidden = ['contrasena'];
 }
