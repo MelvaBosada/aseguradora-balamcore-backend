@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empleado;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class EmpleadoController extends Controller
 {
@@ -43,7 +44,7 @@ class EmpleadoController extends Controller
     {
         $request->validate([
             'nombre'                         => 'required|string|max:150',
-            'apellidos'                       => 'required|string|max:150',
+            'apellidos'                      => 'required|string|max:150',
             'fecha_nacimiento'               => 'required|date',
             'genero'                         => 'required|string',
             'estado_civil'                   => 'required|string',
@@ -73,15 +74,26 @@ class EmpleadoController extends Controller
             'contacto_emergencia_nombre'     => 'required|string',
             'contacto_emergencia_parentesco' => 'required|string',
             'contacto_emergencia_telefono'   => 'required|string',
-            'id_usuario'                     => 'required|integer',
             'id_aseguradora'                 => 'required|integer',
+            'password'                       => 'required|min:5',
+            'id_rol'                         => 'required|integer',
         ]);
 
+        // 1. Crear usuario
+        $usuario = \App\Models\Usuario::create([
+            'correo'         => $request->correo,
+            'contrasena'     => Hash::make($request->password),
+            'id_rol'         => $request->id_rol,
+            'id_aseguradora' => $request->id_aseguradora,
+            'es_superadmin'  => false,
+        ]);
+
+        // 2. Crear empleado con el id_usuario recién creado
         $empleado = Empleado::create([
             'id_aseguradora'                 => $request->id_aseguradora,
-            'id_usuario'                     => $request->id_usuario,
+            'id_usuario'                     => $usuario->id,
             'nombre'                         => $request->nombre,
-            'apellidos'                       => $request->apellidos,
+            'apellidos'                      => $request->apellidos,
             'fecha_nacimiento'               => $request->fecha_nacimiento,
             'genero'                         => $request->genero,
             'estado_civil'                   => $request->estado_civil,

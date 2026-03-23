@@ -86,7 +86,7 @@ class AuthController extends Controller
 
         $aseguradora = json_decode($resAseguradora->getContent())->aseguradora;
 
-        //UsuarioController@store
+        //UsuarioController
         $request->merge([
             'id_aseguradora' => $aseguradora->id,
             'id_rol'         => 1,
@@ -107,35 +107,50 @@ class AuthController extends Controller
     }
 
     public function login(Request $request)
-    {
-        $request->validate([
-            'correo'   => 'required|email',
-            'password' => 'required',
-        ]);
+{
+    $request->validate([
+        'correo'   => 'required|email',
+        'password' => 'required',
+    ]);
 
-        $usuario = DB::table('usuarios')
-            ->join('roles', 'usuarios.id_rol', '=', 'roles.id')
-            ->leftJoin('aseguradoras', 'usuarios.id_aseguradora', '=', 'aseguradoras.id')
-            ->select(
-                'usuarios.*',
-                'roles.nombre as rol',
-                'aseguradoras.nombre as aseguradora'
-            )
-            ->where('usuarios.correo', $request->correo)
-            ->first();
+    $usuario = DB::table('usuarios')
+        ->join('roles', 'usuarios.id_rol', '=', 'roles.id')
+        ->leftJoin('aseguradoras', 'usuarios.id_aseguradora', '=', 'aseguradoras.id')
+        ->leftJoin('empleados', 'empleados.id_usuario', '=', 'usuarios.id')
+        ->select(
+            'usuarios.*',
+            'roles.nombre as rol',
+            'aseguradoras.nombre as aseguradora',
+            'empleados.nombre as nombre',
+            'empleados.apellidos as apellidos',
+        )
+        ->where('usuarios.correo', $request->correo)
+        ->first();
 
-        if (!$usuario || !Hash::check($request->password, $usuario->contrasena)) {
-            return response()->json(['message' => 'Credenciales incorrectas'], 401);
-        }
-
-        return response()->json([
-            'message' => 'Login exitoso',
-            'usuario' => $usuario,
-        ]);
+    if (!$usuario || !Hash::check($request->password, $usuario->contrasena)) {
+        return response()->json(['message' => 'Credenciales incorrectas'], 401);
     }
 
-    public function logout()
+    $permisos = DB::table('rolxpermiso')
+        ->join('permisos', 'rolxpermiso.id_permiso', '=', 'permisos.id')
+        ->where('rolxpermiso.id_rol', $usuario->id_rol)
+        ->pluck('permisos.clave')
+        ->toArray();
+
+    $usuarioModel = \App\Models\Usuario::find($usuario->id);
+    $token = $usuarioModel->createToken('auth_token')->plainTextToken;
+
+    return response()->json([
+        'message'  => 'Login exitoso',
+        'token'    => $token,
+        'usuario'  => $usuario,
+        'permisos' => $permisos,
+    ]);
+}
+
+    public function logout(Request $request)
     {
+        $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Sesión cerrada']);
     }
 }
