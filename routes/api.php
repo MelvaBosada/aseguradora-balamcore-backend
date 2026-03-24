@@ -7,7 +7,12 @@ use App\Http\Controllers\RolController;
 use App\Http\Controllers\PermisoController;
 use App\Http\Controllers\RolxPermisoController;
 use App\Http\Controllers\EmpleadoController;
+use App\Http\Controllers\ModuloController;
+use App\Http\Controllers\SuscripcionController;
+use App\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
+
+
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -57,3 +62,26 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put   ('/empleados/{id}', [EmpleadoController::class, 'update'])->middleware('permiso:empleados');
     Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy'])->middleware('permiso:empleados');
 });
+
+// ── Planes ────────────────────────────────────────────
+Route::get   ('/planes',                         [PlanController::class, 'index']);
+Route::get   ('/planes/{id}',                    [PlanController::class, 'show']);
+Route::post  ('/planes',                         [PlanController::class, 'store']);
+Route::put   ('/planes/{id}',                    [PlanController::class, 'update']);
+Route::delete('/planes/{id}',                    [PlanController::class, 'destroy']);
+Route::get   ('/planes/{id_plan}/modulos',       [PlanController::class, 'getModulos']);
+Route::post  ('/planes/{id_plan}/modulos',       [PlanController::class, 'asignarModulos']);
+
+// ── Módulos ───────────────────────────────────────────
+Route::get   ('/modulos',      [ModuloController::class, 'index']);
+Route::get   ('/modulos/{id}', [ModuloController::class, 'show']);
+Route::post  ('/modulos',      [ModuloController::class, 'store']);
+Route::put   ('/modulos/{id}', [ModuloController::class, 'update']);
+Route::delete('/modulos/{id}', [ModuloController::class, 'destroy']);
+
+// ── Suscripciones ─────────────────────────────────────
+Route::get   ('/suscripciones',                          [SuscripcionController::class, 'index']);
+Route::get   ('/suscripciones/{id_aseguradora}',         [SuscripcionController::class, 'getByAseguradora']);
+Route::post  ('/suscripciones/{id_aseguradora}/activar', [SuscripcionController::class, 'activar']);
+Route::put   ('/suscripciones/{id}/cancelar',            [SuscripcionController::class, 'cancelar']);
+Route::delete('/suscripciones/{id}',                     [SuscripcionController::class, 'destroy']);

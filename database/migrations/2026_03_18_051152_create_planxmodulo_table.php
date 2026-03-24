@@ -13,7 +13,8 @@ return new class extends Migration
     {
         Schema::create('planxmodulo', function (Blueprint $table) {
             $table->id();
-            $table->timestamps();
+            $table->unsignedBigInteger('id_plan');
+            $table->unsignedBigInteger('id_modulo');
         });
     }
 
