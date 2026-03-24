@@ -21,6 +21,7 @@ class PermisosSeeder extends Seeder
             ['nombre' => 'Permisos',        'descripcion' => 'Gestión de permisos por rol',                  'clave' => 'permisos'],
             ['nombre' => 'Reportes',        'descripcion' => 'Acceso a reportes y estadísticas',             'clave' => 'reportes'],
             ['nombre' => 'Renovaciones',    'descripcion' => 'Gestión de renovaciones y pólizas por vencer', 'clave' => 'renovaciones'],
+            
         ]);
     }
 }

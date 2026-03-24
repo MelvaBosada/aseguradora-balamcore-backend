@@ -64,49 +64,64 @@ class AuthController extends Controller
         return response()->json(['message' => 'Correo verificado correctamente']);
     }
 
-    public function registro(Request $request)
-    {
-        // Verificar OTP
-        $otp = DB::table('otps')
-            ->where('correo',     $request->correo)
-            ->where('verificado', true)
-            ->first();
+   public function registro(Request $request)
+{
+    // Verificar OTP
+    $otp = DB::table('otps')
+        ->where('correo',     $request->correo)
+        ->where('verificado', true)
+        ->first();
 
-        if (!$otp) {
-            return response()->json(['message' => 'Correo no verificado'], 422);
-        }
-
-        // AseguradoraController@store
-        $aseguradoraController = new AseguradoraController();
-        $resAseguradora = $aseguradoraController->store($request);
-
-        if ($resAseguradora->getStatusCode() !== 201) {
-            return $resAseguradora;
-        }
-
-        $aseguradora = json_decode($resAseguradora->getContent())->aseguradora;
-
-        //UsuarioController
-        $request->merge([
-            'id_aseguradora' => $aseguradora->id,
-            'id_rol'         => 1,
-        ]);
-
-        $usuarioController = new UsuarioController();
-        $resUsuario = $usuarioController->store($request);
-
-        if ($resUsuario->getStatusCode() !== 201) {
-            Aseguradora::findOrFail($aseguradora->id)->delete();
-            return $resUsuario;
-        }
-
-        // Limpiar OTP
-        DB::table('otps')->where('correo', $request->correo)->delete();
-
-        return response()->json(['message' => 'Registro exitoso'], 201);
+    if (!$otp) {
+        return response()->json(['message' => 'Correo no verificado'], 422);
     }
 
-    public function login(Request $request)
+    // Crear aseguradora
+    $aseguradoraController = new AseguradoraController();
+    $resAseguradora = $aseguradoraController->store($request);
+
+    if ($resAseguradora->getStatusCode() !== 201) {
+        return $resAseguradora;
+    }
+
+    $aseguradora = json_decode($resAseguradora->getContent())->aseguradora;
+
+    // Crear usuario admin con rol 1
+    $request->merge([
+        'id_aseguradora' => $aseguradora->id,
+        'id_rol'         => 1,
+    ]);
+
+    $usuarioController = new UsuarioController();
+    $resUsuario = $usuarioController->store($request);
+
+    if ($resUsuario->getStatusCode() !== 201) {
+        Aseguradora::findOrFail($aseguradora->id)->delete();
+        return $resUsuario;
+    }
+
+    // Crear suscripción de prueba 15 días con plan Pro
+    $planPro = DB::table('planes')->where('nombre', 'Pro')->first();
+
+    if ($planPro) {
+        DB::table('suscripciones')->insert([
+            'id_aseguradora' => $aseguradora->id,
+            'id_plan'        => $planPro->id,
+            'estatus'        => 'prueba',
+            'fecha_inicio'   => Carbon::now(),
+            'fecha_fin'      => Carbon::now()->addDays(15),
+            'created_at'     => Carbon::now(),
+            'updated_at'     => Carbon::now(),
+        ]);
+    }
+
+    // Limpiar OTP
+    DB::table('otps')->where('correo', $request->correo)->delete();
+
+    return response()->json(['message' => 'Registro exitoso'], 201);
+}
+
+public function login(Request $request)
 {
     $request->validate([
         'correo'   => 'required|email',
@@ -114,37 +129,64 @@ class AuthController extends Controller
     ]);
 
     $usuario = DB::table('usuarios')
-        ->join('roles', 'usuarios.id_rol', '=', 'roles.id')
-        ->leftJoin('aseguradoras', 'usuarios.id_aseguradora', '=', 'aseguradoras.id')
-        ->leftJoin('empleados', 'empleados.id_usuario', '=', 'usuarios.id')
-        ->select(
-            'usuarios.*',
-            'roles.nombre as rol',
-            'aseguradoras.nombre as aseguradora',
-            'empleados.nombre as nombre',
-            'empleados.apellidos as apellidos',
-        )
-        ->where('usuarios.correo', $request->correo)
-        ->first();
+    ->join('roles', 'usuarios.id_rol', '=', 'roles.id')
+    ->leftJoin('aseguradoras', 'usuarios.id_aseguradora', '=', 'aseguradoras.id')
+    ->leftJoin('empleados', 'empleados.id_usuario', '=', 'usuarios.id')
+    ->select(
+        'usuarios.*',
+        'roles.nombre as rol',
+        'aseguradoras.nombre as aseguradora',
+        'aseguradoras.fecha_registro',
+        'empleados.nombre as nombre',
+        'empleados.apellidos as apellidos',
+    )
+    ->where('usuarios.correo', $request->correo)
+    ->first();
 
     if (!$usuario || !Hash::check($request->password, $usuario->contrasena)) {
         return response()->json(['message' => 'Credenciales incorrectas'], 401);
     }
 
+    // Permisos del rol
     $permisos = DB::table('rolxpermiso')
         ->join('permisos', 'rolxpermiso.id_permiso', '=', 'permisos.id')
         ->where('rolxpermiso.id_rol', $usuario->id_rol)
         ->pluck('permisos.clave')
         ->toArray();
 
+    // Suscripción activa de la aseguradora
+    $suscripcion = DB::table('suscripciones')
+        ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
+        ->select(
+            'suscripciones.*',
+            'planes.nombre as plan',
+            'planes.precio',
+        )
+        ->where('suscripciones.id_aseguradora', $usuario->id_aseguradora)
+        ->whereIn('suscripciones.estatus', ['prueba', 'activo'])
+        ->orderBy('suscripciones.id', 'desc')
+        ->first();
+
+    // Módulos del plan activo
+    $modulos = [];
+    if ($suscripcion) {
+        $modulos = DB::table('planxmodulo')
+            ->join('modulos', 'planxmodulo.id_modulo', '=', 'modulos.id')
+            ->where('planxmodulo.id_plan', $suscripcion->id_plan)
+            ->pluck('modulos.clave')
+            ->toArray();
+    }
+
     $usuarioModel = \App\Models\Usuario::find($usuario->id);
     $token = $usuarioModel->createToken('auth_token')->plainTextToken;
 
     return response()->json([
-        'message'  => 'Login exitoso',
-        'token'    => $token,
-        'usuario'  => $usuario,
-        'permisos' => $permisos,
+        'message'      => 'Login exitoso',
+        'token'        => $token,
+        'usuario'      => $usuario,
+        'permisos'     => $permisos,
+        'modulos'      => $modulos,
+        'suscripcion'  => $suscripcion,
     ]);
 }
 
