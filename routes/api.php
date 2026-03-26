@@ -10,6 +10,7 @@ use App\Http\Controllers\EmpleadoController;
 use App\Http\Controllers\ModuloController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -61,7 +62,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post  ('/empleados',      [EmpleadoController::class, 'store'])->middleware('permiso:empleados');
     Route::put   ('/empleados/{id}', [EmpleadoController::class, 'update'])->middleware('permiso:empleados');
     Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy'])->middleware('permiso:empleados');
+
+
+    // ── Dashboard ─────────────────────────────────────────
+Route::prefix('dashboard')->group(function () {
+    Route::get('/kpis',                 [DashboardController::class, 'kpis']);
+    Route::get('/ingresos',             [DashboardController::class, 'ingresos']);
+    Route::get('/polizas-por-tipo',     [DashboardController::class, 'polizasPorTipo']);
+    Route::get('/tendencia-siniestros', [DashboardController::class, 'tendenciaSiniestros']);
+    Route::get('/ultimos-siniestros',   [DashboardController::class, 'ultimosSiniestros']);
 });
+});
+
 
 // ── Planes ────────────────────────────────────────────
 Route::get   ('/planes',                         [PlanController::class, 'index']);
