@@ -67,6 +67,8 @@ Route::middleware('auth:sanctum')->group(function () {
     
 // ── Polizas ─────────────────────────────────────────
     Route::get('/polizas-vencer', [PolizaVencerController::class, 'index']);
+    Route::post('/polizas-vencer/avisar', [PolizaVencerController::class, 'avisar']);
+
    
    
 
