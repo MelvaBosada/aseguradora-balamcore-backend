@@ -11,7 +11,9 @@ use App\Http\Controllers\ModuloController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PolizaVencerController;
 use Illuminate\Support\Facades\Route;
+
 
 
 
@@ -62,7 +64,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post  ('/empleados',      [EmpleadoController::class, 'store'])->middleware('permiso:empleados');
     Route::put   ('/empleados/{id}', [EmpleadoController::class, 'update'])->middleware('permiso:empleados');
     Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy'])->middleware('permiso:empleados');
-
+    
+// ── Polizas ─────────────────────────────────────────
+    Route::get('/polizas-vencer', [PolizaVencerController::class, 'index']);
+   
+   
 
     // ── Dashboard ─────────────────────────────────────────
 Route::prefix('dashboard')->group(function () {
@@ -71,6 +77,8 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/polizas-por-tipo',     [DashboardController::class, 'polizasPorTipo']);
     Route::get('/tendencia-siniestros', [DashboardController::class, 'tendenciaSiniestros']);
     Route::get('/ultimos-siniestros',   [DashboardController::class, 'ultimosSiniestros']);
+     
+
 });
 });
 
