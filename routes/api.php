@@ -12,6 +12,7 @@ use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PolizaVencerController;
+use App\Http\Controllers\CoberturaController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -27,6 +28,12 @@ Route::post('/login',         [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    Route::get    ('/coberturas',      [CoberturaController::class, 'index']);
+    Route::get    ('/coberturas/{id}', [CoberturaController::class, 'show']);
+    Route::post   ('/coberturas',      [CoberturaController::class, 'store']);
+    Route::put    ('/coberturas/{id}', [CoberturaController::class, 'update']);
+    Route::delete ('/coberturas/{id}', [CoberturaController::class, 'destroy']);
 
     // ── Aseguradoras ─────────────────────────────────
     Route::get   ('/aseguradoras',      [AseguradoraController::class, 'index']);
@@ -68,8 +75,7 @@ Route::middleware('auth:sanctum')->group(function () {
 // ── Polizas ─────────────────────────────────────────
     Route::get('/polizas-vencer', [PolizaVencerController::class, 'index']);
     Route::post('/polizas-vencer/avisar', [PolizaVencerController::class, 'avisar']);
-
-   
+ 
    
 
     // ── Dashboard ─────────────────────────────────────────
@@ -79,6 +85,7 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/polizas-por-tipo',     [DashboardController::class, 'polizasPorTipo']);
     Route::get('/tendencia-siniestros', [DashboardController::class, 'tendenciaSiniestros']);
     Route::get('/ultimos-siniestros',   [DashboardController::class, 'ultimosSiniestros']);
+    
      
 
 });
