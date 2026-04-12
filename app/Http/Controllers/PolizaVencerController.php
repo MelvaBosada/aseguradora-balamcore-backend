@@ -49,6 +49,7 @@ class PolizaVencerController extends Controller
                 'polizas.aviso_enviado_at',
             )
             ->where('polizas.estatus', 'activa')
+            ->where('polizas.id_aseguradora', $request->user()->id_aseguradora)
             ->whereDate('polizas.fecha_fin', '>=', $hoy)
             ->whereDate('polizas.fecha_fin', '<=', $limite)
             ->orderBy('polizas.fecha_fin', 'asc')
