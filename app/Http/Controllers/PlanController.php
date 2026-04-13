@@ -9,11 +9,25 @@ use Carbon\Carbon;
 
 class PlanController extends Controller
 {
-    public function index()
-    {
-        $planes = Plan::where('estatus', 'activo')->get();
-        return response()->json($planes);
-    }
+   public function index()
+{
+    $planes = Plan::where('estatus', 'activo')
+        ->select(
+            'id', 'nombre', 'descripcion',
+            'precio', 'precio_anual',
+            'duracion_dias', 'dias_prueba',
+            'stripe_price_id',
+            'limite_polizas_vencer_dia',
+            'limite_siniestros_mes',
+            'limite_bienes_por_cliente',
+            'pdf_ilimitado',
+            'soporte_prioritario',
+            'estatus'
+        )
+        ->get();
+
+    return response()->json($planes);
+}
 
     public function show($id)
     {

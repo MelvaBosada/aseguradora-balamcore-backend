@@ -136,11 +136,25 @@ class EmpleadoController extends Controller
             'empleado' => $empleado,
         ], 201);
     }
-
-    public function update(Request $request, $id)
+    
+ public function update(Request $request, $id)
     {
         $empleado = Empleado::findOrFail($id);
-        $empleado->update($request->all());
+
+        // Actualizar empleado
+        $empleado->update($request->except(['password', 'id_rol']));
+
+        // Actualizar rol en la tabla usuarios
+        if ($request->filled('id_rol')) {
+            \App\Models\Usuario::where('id', $empleado->id_usuario)
+                ->update(['id_rol' => $request->id_rol]);
+        }
+
+        // Actualizar password solo si viene
+        if ($request->filled('password')) {
+            \App\Models\Usuario::where('id', $empleado->id_usuario)
+                ->update(['contrasena' => \Illuminate\Support\Facades\Hash::make($request->password)]);
+        }
 
         return response()->json([
             'message'  => 'Empleado actualizado correctamente',
