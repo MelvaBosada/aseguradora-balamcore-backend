@@ -253,6 +253,7 @@ class SuscripcionController extends Controller
             'estatus'                => 'activa',
             'es_trial'               => false,
             'fecha_inicio'           => $now,
+            'periodo'                => $periodo,  
             'fecha_fin'              => $now->copy()->addDays($duracion), // ← FALTA ESTA
             'fecha_fin_trial'        => $now,
             'fecha_inicio_plan'      => $now,
