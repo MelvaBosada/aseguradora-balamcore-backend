@@ -53,6 +53,9 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+    # ── 4. AGREGAR EN config/app.php ──────────────────────
+'frontend_url' => env('FRONTEND_URL', 'http://localhost:5174'),
+
 
     /*
     |--------------------------------------------------------------------------
