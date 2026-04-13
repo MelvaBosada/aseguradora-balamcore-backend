@@ -13,6 +13,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PolizaVencerController;
 use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\BienesController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -29,6 +30,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
+     // ── Bienes ─────────────────────────────────────
+    Route::get    ('/bienes',      [BienesController::class, 'index']);
+    Route::get    ('/bienes/{id}', [BienesController::class, 'show']);
+    Route::post   ('/bienes',      [BienesController::class, 'store']);
+    Route::put    ('/bienes/{id}', [BienesController::class, 'update']);
+    Route::delete ('/bienes/{id}', [BienesController::class, 'destroy']);
+
+    // ── Cobertura ─────────────────────────────────
     Route::get('/coberturas',      [CoberturaController::class, 'index']);
     Route::get('/coberturas/{id}', [CoberturaController::class, 'show']);
     Route::post('/coberturas',      [CoberturaController::class, 'store']);
