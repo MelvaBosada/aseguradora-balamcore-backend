@@ -13,6 +13,7 @@ use App\Http\Controllers\PlanController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PolizaVencerController;
 use App\Http\Controllers\CoberturaController;
+use App\Http\Controllers\BienesController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -22,13 +23,21 @@ use Illuminate\Support\Facades\Route;
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
 Route::post('/verificar-otp', [AuthController::class, 'verificarOtp']);
 Route::post('/registro',      [AuthController::class, 'registro']);
-Route::post('/login',         [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 
 // ── Rutas protegidas con Sanctum ───────────────
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
+    // ── Bienes ─────────────────────────────────────
+    Route::get    ('/bienes',      [BienesController::class, 'index']);
+    Route::get    ('/bienes/{id}', [BienesController::class, 'show']);
+    Route::post   ('/bienes',      [BienesController::class, 'store']);
+    Route::put    ('/bienes/{id}', [BienesController::class, 'update']);
+    Route::delete ('/bienes/{id}', [BienesController::class, 'destroy']);
+
+    // ── Coberturas ─────────────────────────────────
     Route::get    ('/coberturas',      [CoberturaController::class, 'index']);
     Route::get    ('/coberturas/{id}', [CoberturaController::class, 'show']);
     Route::post   ('/coberturas',      [CoberturaController::class, 'store']);
@@ -85,9 +94,6 @@ Route::prefix('dashboard')->group(function () {
     Route::get('/polizas-por-tipo',     [DashboardController::class, 'polizasPorTipo']);
     Route::get('/tendencia-siniestros', [DashboardController::class, 'tendenciaSiniestros']);
     Route::get('/ultimos-siniestros',   [DashboardController::class, 'ultimosSiniestros']);
-    
-     
-
 });
 });
 
