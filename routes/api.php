@@ -14,6 +14,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PolizaVencerController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\BienesController;
+use App\Http\Controllers\ReportesController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -29,6 +30,15 @@ Route::post('/login',         [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // ── Reportes ─────────────────────────────────────
+    Route::prefix('reportes')->group(function () {
+    Route::get('/', [ReportesController::class, 'index']);         
+    Route::post('/', [ReportesController::class, 'store']);       
+    Route::get('/{id}', [ReportesController::class, 'show']);       
+    Route::put('/{id}', [ReportesController::class, 'update']);     
+    Route::delete('/{id}', [ReportesController::class, 'destroy']); 
+    });
 
      // ── Bienes ─────────────────────────────────────
     Route::get    ('/bienes',      [BienesController::class, 'index']);
