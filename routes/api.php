@@ -11,6 +11,7 @@ use App\Http\Controllers\ModuloController;
 use App\Http\Controllers\SuscripcionController;
 use App\Http\Controllers\PlanController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ClienteController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -97,3 +98,13 @@ Route::get   ('/suscripciones/{id_aseguradora}',         [SuscripcionController:
 Route::post  ('/suscripciones/{id_aseguradora}/activar', [SuscripcionController::class, 'activar']);
 Route::put   ('/suscripciones/{id}/cancelar',            [SuscripcionController::class, 'cancelar']);
 Route::delete('/suscripciones/{id}',                     [SuscripcionController::class, 'destroy']);
+
+// Clientes
+Route::middleware('auth:sanctum')->group(function () {
+    // Clientes
+    Route::get('/clientes', [ClienteController::class, 'index']);
+    Route::get('/clientes/{id}', [ClienteController::class, 'show']);
+    Route::post('/clientes', [ClienteController::class, 'store']);
+    Route::put('/clientes/{id}', [ClienteController::class, 'update']);
+    Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
+});
