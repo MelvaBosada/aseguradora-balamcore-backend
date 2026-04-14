@@ -15,6 +15,7 @@ use App\Http\Controllers\PolizaVencerController;
 use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\BienesController;
 use App\Http\Controllers\ReportesController;
+use App\Http\Controllers\IndemnizacionesController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -30,6 +31,13 @@ Route::post('/login',         [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // ── Indemnizaciones ───────────────────────────────────
+    Route::get('/indemnizaciones',          [IndemnizacionesController::class, 'index']);
+    Route::get('/indemnizaciones/{id}',     [IndemnizacionesController::class, 'show']);
+    Route::post('/indemnizaciones',         [IndemnizacionesController::class, 'store']);
+    Route::put('/indemnizaciones/{id}',     [IndemnizacionesController::class, 'update']);
+    Route::delete('/indemnizaciones/{id}',  [IndemnizacionesController::class, 'destroy']);
 
     // ── Reportes ─────────────────────────────────────
     Route::prefix('reportes')->group(function () {
@@ -50,7 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Cobertura ─────────────────────────────────
     Route::get('/coberturas',      [CoberturaController::class, 'index']);
     Route::get('/coberturas/{id}', [CoberturaController::class, 'show']);
-    Route::post('/coberturas',      [CoberturaController::class, 'store']);
+    Route::post('/coberturas',     [CoberturaController::class, 'store']);
     Route::put('/coberturas/{id}', [CoberturaController::class, 'update']);
     Route::delete('/coberturas/{id}', [CoberturaController::class, 'destroy']);
 
