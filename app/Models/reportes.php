@@ -14,7 +14,7 @@ class Reportes extends Model
     // Indicamos la llave primaria explícitamente
     protected $primaryKey = 'id';
 
-    // DESACTIVAR TIMESTAMPS (Esto es lo que causa el error 500)
+    // DESACTIVAR TIMESTAMPS
     public $timestamps = false; 
 
     protected $fillable = [
@@ -41,4 +41,24 @@ class Reportes extends Model
         'fecha_ocurrencia' => 'datetime',
         'fecha_actualizacion' => 'datetime',
     ];
+
+    // ─── RELACIONES ─────────────────────────────────────────
+    
+    // Relación con póliza (la columna se llama id_poliza)
+    public function poliza()
+    {
+        return $this->belongsTo(Poliza::class, 'id_poliza');
+    }
+
+    // Relación con siniestro
+    public function siniestro()
+    {
+        return $this->belongsTo(Siniestro::class, 'id_siniestro');
+    }
+
+    // Relación con empleado
+    public function empleado()
+    {
+        return $this->belongsTo(Empleado::class, 'id_empleado');
+    }
 }

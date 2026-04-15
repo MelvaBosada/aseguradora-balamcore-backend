@@ -16,10 +16,12 @@ use App\Http\Controllers\CoberturaController;
 use App\Http\Controllers\BienesController;
 use App\Http\Controllers\ReportesController;
 use App\Http\Controllers\IndemnizacionesController;
+use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\PolizaController;
+use App\Http\Controllers\SiniestroController;
+use App\Http\Controllers\RenovacionController;
+use App\Http\Controllers\EvaluacionController;
 use Illuminate\Support\Facades\Route;
-
-
-
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -41,50 +43,87 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Reportes ─────────────────────────────────────
     Route::prefix('reportes')->group(function () {
-    Route::get('/', [ReportesController::class, 'index']);         
-    Route::post('/', [ReportesController::class, 'store']);       
-    Route::get('/{id}', [ReportesController::class, 'show']);       
-    Route::put('/{id}', [ReportesController::class, 'update']);     
-    Route::delete('/{id}', [ReportesController::class, 'destroy']); 
+        Route::get('/', [ReportesController::class, 'index']);         
+        Route::post('/', [ReportesController::class, 'store']);       
+        Route::get('/{id}', [ReportesController::class, 'show']);       
+        Route::put('/{id}', [ReportesController::class, 'update']);     
+        Route::delete('/{id}', [ReportesController::class, 'destroy']); 
     });
 
-     // ── Bienes ─────────────────────────────────────
-    Route::get    ('/bienes',      [BienesController::class, 'index']);
-    Route::get    ('/bienes/{id}', [BienesController::class, 'show']);
-    Route::post   ('/bienes',      [BienesController::class, 'store']);
-    Route::put    ('/bienes/{id}', [BienesController::class, 'update']);
-    Route::delete ('/bienes/{id}', [BienesController::class, 'destroy']);
+    // ── Clientes ─────────────────────────────────────
+    Route::get('/clientes', [ClienteController::class, 'index']);
+    Route::get('/clientes/{id}', [ClienteController::class, 'show']);
+    Route::post('/clientes', [ClienteController::class, 'store']);
+    Route::put('/clientes/{id}', [ClienteController::class, 'update']);
+    Route::delete('/clientes/{id}', [ClienteController::class, 'destroy']);
+
+    // ── Pólizas ──────────────────────────────────────
+    Route::get('/polizas/buscar-ultima-por-rfc', [PolizaController::class, 'getUltimaPolizaPorRfc']);
+    Route::post('/polizas/{id}/asignar-bienes', [PolizaController::class, 'asignarBienes']);
+    Route::get('/polizas/buscar-cliente', [PolizaController::class, 'buscarClientePorRfc']);
+    Route::apiResource('polizas', PolizaController::class);
+
+    // ── Siniestros ──────────────────────────────────────
+    Route::get('/siniestros', [SiniestroController::class, 'index']);
+    Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto']);
+    Route::post('/siniestros', [SiniestroController::class, 'store']);
+    Route::put('/siniestros/{id}', [SiniestroController::class, 'update']);
+    Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy']);
+    Route::get('/siniestros/test/{id}', [SiniestroController::class, 'testDetalle']);
+    Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
+    Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
+    Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
+
+    // ── Renovaciones de Pólizas ────────────────────────────
+    Route::get('/renovaciones', [RenovacionController::class, 'index']);
+    Route::get('/renovaciones/poliza/{id}/detalle', [RenovacionController::class, 'getDetalleParaRenovar']);
+    Route::post('/renovaciones', [RenovacionController::class, 'store']);
+    Route::get('/renovaciones/poliza/{polizaId}/historial', [RenovacionController::class, 'getHistorial']);
+
+    // ── Evaluaciones ─────────────────────────────────────
+    Route::get('/evaluaciones', [EvaluacionController::class, 'index']);
+    Route::get('/evaluaciones/{id}', [EvaluacionController::class, 'show']);
+
+    // ── Bienes ─────────────────────────────────────
+    Route::get('/bienes/cliente/{clienteId}', [BienesController::class, 'getByClienteId']);
+    Route::get('/bienes', [BienesController::class, 'index']);
+    Route::get('/bienes/{id}', [BienesController::class, 'show']);
+    Route::post('/bienes', [BienesController::class, 'store']);
+    Route::put('/bienes/{id}', [BienesController::class, 'update']);
+    Route::delete('/bienes/{id}', [BienesController::class, 'destroy']);
 
     // ── Cobertura ─────────────────────────────────
-    Route::get('/coberturas',      [CoberturaController::class, 'index']);
+    Route::get('/coberturas', [CoberturaController::class, 'index']);
     Route::get('/coberturas/{id}', [CoberturaController::class, 'show']);
-    Route::post('/coberturas',     [CoberturaController::class, 'store']);
+    Route::post('/coberturas', [CoberturaController::class, 'store']);
     Route::put('/coberturas/{id}', [CoberturaController::class, 'update']);
     Route::delete('/coberturas/{id}', [CoberturaController::class, 'destroy']);
 
+    Route::get('/coberturas', [CoberturaController::class, 'index']);
+
     // ── Aseguradoras ─────────────────────────────────
-    Route::get('/aseguradoras',      [AseguradoraController::class, 'index']);
+    Route::get('/aseguradoras', [AseguradoraController::class, 'index']);
     Route::get('/aseguradoras/{id}', [AseguradoraController::class, 'show']);
-    Route::post('/aseguradoras',      [AseguradoraController::class, 'store']);
+    Route::post('/aseguradoras', [AseguradoraController::class, 'store']);
     Route::put('/aseguradoras/{id}', [AseguradoraController::class, 'update']);
     Route::delete('/aseguradoras/{id}', [AseguradoraController::class, 'destroy']);
 
     // ── Usuarios ──────────────────────────────────────
-    Route::get('/usuarios',      [UsuarioController::class, 'index']);
+    Route::get('/usuarios', [UsuarioController::class, 'index']);
     Route::get('/usuarios/{id}', [UsuarioController::class, 'show']);
-    Route::post('/usuarios',      [UsuarioController::class, 'store']);
+    Route::post('/usuarios', [UsuarioController::class, 'store']);
     Route::put('/usuarios/{id}', [UsuarioController::class, 'update']);
     Route::delete('/usuarios/{id}', [UsuarioController::class, 'destroy']);
 
     // ── Roles ─────────────────────────────────────────
-    Route::get('/roles',      [RolController::class, 'index']);
-    Route::post('/roles',      [RolController::class, 'store']);
+    Route::get('/roles', [RolController::class, 'index']);
+    Route::post('/roles', [RolController::class, 'store']);
     Route::put('/roles/{id}', [RolController::class, 'update']);
     Route::delete('/roles/{id}', [RolController::class, 'destroy']);
 
     // ── Permisos ──────────────────────────────────────
-    Route::get('/permisos',      [PermisoController::class, 'index'])->middleware('permiso:permisos');
-    Route::post('/permisos',      [PermisoController::class, 'store'])->middleware('permiso:permisos');
+    Route::get('/permisos', [PermisoController::class, 'index'])->middleware('permiso:permisos');
+    Route::post('/permisos', [PermisoController::class, 'store'])->middleware('permiso:permisos');
     Route::put('/permisos/{id}', [PermisoController::class, 'update'])->middleware('permiso:permisos');
     Route::delete('/permisos/{id}', [PermisoController::class, 'destroy'])->middleware('permiso:permisos');
 
@@ -93,62 +132,57 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/roles/{id_rol}/permisos', [RolxPermisoController::class, 'asignarPermisos'])->middleware('permiso:perfiles');
 
     // ── Empleados ─────────────────────────────────────
-    Route::get('/empleados',      [EmpleadoController::class, 'index'])->middleware('permiso:empleados');
+    Route::get('/empleados', [EmpleadoController::class, 'index'])->middleware('permiso:empleados');
     Route::get('/empleados/{id}', [EmpleadoController::class, 'show'])->middleware('permiso:empleados');
-    Route::post('/empleados',      [EmpleadoController::class, 'store'])->middleware('permiso:empleados');
+    Route::post('/empleados', [EmpleadoController::class, 'store'])->middleware('permiso:empleados');
     Route::put('/empleados/{id}', [EmpleadoController::class, 'update'])->middleware('permiso:empleados');
     Route::delete('/empleados/{id}', [EmpleadoController::class, 'destroy'])->middleware('permiso:empleados');
 
-    // ── Polizas ─────────────────────────────────────────
+    // ── Polizas por vencer ─────────────────────────────────────────
     Route::get('/polizas-vencer', [PolizaVencerController::class, 'index']);
     Route::post('/polizas-vencer/avisar', [PolizaVencerController::class, 'avisar']);
 
-
-
     // ── Dashboard ─────────────────────────────────────────
     Route::prefix('dashboard')->group(function () {
-        Route::get('/kpis',                 [DashboardController::class, 'kpis']);
-        Route::get('/ingresos',             [DashboardController::class, 'ingresos']);
-        Route::get('/polizas-por-tipo',     [DashboardController::class, 'polizasPorTipo']);
+        Route::get('/kpis', [DashboardController::class, 'kpis']);
+        Route::get('/ingresos', [DashboardController::class, 'ingresos']);
+        Route::get('/polizas-por-tipo', [DashboardController::class, 'polizasPorTipo']);
         Route::get('/tendencia-siniestros', [DashboardController::class, 'tendenciaSiniestros']);
-        Route::get('/ultimos-siniestros',   [DashboardController::class, 'ultimosSiniestros']);
+        Route::get('/ultimos-siniestros', [DashboardController::class, 'ultimosSiniestros']);
     });
 
-
-
-
     // ── Planes ────────────────────────────────────────────
-    Route::get('/planes',                         [PlanController::class, 'index']);
-    Route::get('/planes/{id}',                    [PlanController::class, 'show']);
-    Route::post('/planes',                         [PlanController::class, 'store']);
-    Route::put('/planes/{id}',                    [PlanController::class, 'update']);
-    Route::delete('/planes/{id}',                    [PlanController::class, 'destroy']);
-    Route::get('/planes/{id_plan}/modulos',       [PlanController::class, 'getModulos']);
-    Route::post('/planes/{id_plan}/modulos',       [PlanController::class, 'asignarModulos']);
+    Route::get('/planes', [PlanController::class, 'index']);
+    Route::get('/planes/{id}', [PlanController::class, 'show']);
+    Route::post('/planes', [PlanController::class, 'store']);
+    Route::put('/planes/{id}', [PlanController::class, 'update']);
+    Route::delete('/planes/{id}', [PlanController::class, 'destroy']);
+    Route::get('/planes/{id_plan}/modulos', [PlanController::class, 'getModulos']);
+    Route::post('/planes/{id_plan}/modulos', [PlanController::class, 'asignarModulos']);
 
     // ── Módulos ───────────────────────────────────────────
-    Route::get('/modulos',      [ModuloController::class, 'index']);
+    Route::get('/modulos', [ModuloController::class, 'index']);
     Route::get('/modulos/{id}', [ModuloController::class, 'show']);
-    Route::post('/modulos',      [ModuloController::class, 'store']);
+    Route::post('/modulos', [ModuloController::class, 'store']);
     Route::put('/modulos/{id}', [ModuloController::class, 'update']);
     Route::delete('/modulos/{id}', [ModuloController::class, 'destroy']);
 
     // ── Suscripciones ─────────────────────────────────────
-    Route::get('/suscripciones',                          [SuscripcionController::class, 'index']);
-    Route::get('/suscripciones/{id_aseguradora}',         [SuscripcionController::class, 'getByAseguradora']);
+    Route::get('/suscripciones', [SuscripcionController::class, 'index']);
+    Route::get('/suscripciones/{id_aseguradora}', [SuscripcionController::class, 'getByAseguradora']);
     Route::post('/suscripciones/{id_aseguradora}/activar', [SuscripcionController::class, 'activar']);
-    Route::put('/suscripciones/{id}/cancelar',            [SuscripcionController::class, 'cancelar']);
-    Route::delete('/suscripciones/{id}',                     [SuscripcionController::class, 'destroy']);
-    Route::get('/suscripcion/actual',          [SuscripcionController::class, 'actual']);
-    Route::post('/suscripcion/checkout',        [SuscripcionController::class, 'crearCheckout']);
-    Route::post('/suscripcion/verificar-pago',  [SuscripcionController::class, 'verificarPago']);
-    Route::get('/suscripcion/limite/{tipo}',   [SuscripcionController::class, 'verificarLimite']);
+    Route::put('/suscripciones/{id}/cancelar', [SuscripcionController::class, 'cancelar']);
+    Route::delete('/suscripciones/{id}', [SuscripcionController::class, 'destroy']);
+    Route::get('/suscripcion/actual', [SuscripcionController::class, 'actual']);
+    Route::post('/suscripcion/checkout', [SuscripcionController::class, 'crearCheckout']);
+    Route::post('/suscripcion/verificar-pago', [SuscripcionController::class, 'verificarPago']);
+    Route::get('/suscripcion/limite/{tipo}', [SuscripcionController::class, 'verificarLimite']);
 
-    //IMPORTANTEEEEEEEEEEE 
+    // IMPORTANTEEEEEEEEEEE 
     // ── Rutas con límites de plan ──────────────────────────
     // Agrega el middleware 'plan:siniestros' a las rutas de crear siniestro
     // Agrega el middleware 'plan:bienes'     a las rutas de crear bien
     // Ejemplo:
     // Route::post('/siniestros', [SiniestroController::class, 'store'])->middleware(['auth:sanctum', 'plan:siniestros']);
-    // Route::post('/bienes',     [BienController::class,      'store'])->middleware(['auth:sanctum', 'plan:bienes']);
+    // Route::post('/bienes',     [BienController::class, 'store'])->middleware(['auth:sanctum', 'plan:bienes']);
 });

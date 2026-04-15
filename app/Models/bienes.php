@@ -19,4 +19,17 @@ class Bienes extends Model
         'tipo_electronico', 'numero_imei', 'color_electronico', 'tipo_maquinaria', 
         'uso_maquinaria', 'estatus'
     ];
+// app/Models/Bienes.php
+
+public function cliente()
+{
+    return $this->belongsTo(Cliente::class, 'id_cliente');
 }
+
+public function poliza()
+{
+    return $this->belongsTo(Poliza::class, 'id_poliza');
+}
+    
+}
+

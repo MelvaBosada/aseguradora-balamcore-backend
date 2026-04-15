@@ -77,4 +77,11 @@ class Cliente extends Model
     {
         return $query->where('estatus', 'activo');
     }
+
+
+    public function polizas()
+    {
+    return $this->hasMany(Poliza::class, 'id_cliente');
+    }
+
 }

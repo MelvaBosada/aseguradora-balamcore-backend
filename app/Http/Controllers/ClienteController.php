@@ -15,7 +15,9 @@ class ClienteController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Cliente::query();
+        $user = auth()->user();
+        
+        $query = Cliente::where('id_aseguradora', $user->id_aseguradora);
 
         // Filtro por búsqueda
         if ($request->has('search') && $request->search) {
@@ -39,7 +41,7 @@ class ClienteController extends Controller
         $perPage = $request->get('per_page', 8);
         $clientes = $query->orderBy('id', 'desc')->paginate($perPage);
 
-        // Transformar datos para que coincidan con el frontend
+        // Transformar datos para que coincidan con el frontend (TODOS los campos)
         $clientes->getCollection()->transform(function($cliente) {
             return [
                 'id' => $cliente->id,
@@ -52,6 +54,18 @@ class ClienteController extends Controller
                 'correo' => $cliente->correo,
                 'estatus' => $cliente->estatus,
                 'fechaAlta' => $cliente->fecha_registro ? $cliente->fecha_registro->format('Y-m-d') : null,
+                // Campos adicionales para el detalle
+                'fecha_nacimiento' => $cliente->fecha_nacimiento,
+                'genero' => $cliente->genero,
+                'estado_civil' => $cliente->estado_civil,
+                'nacionalidad' => $cliente->nacionalidad,
+                'tipo_identificacion' => $cliente->tipo_identificacion,
+                'numero_identificacion' => $cliente->numero_identificacion,
+                'telefono_alternativo' => $cliente->telefono_alternativo,
+                'municipio' => $cliente->municipio,
+                'estado' => $cliente->estado,
+                'codigo_postal' => $cliente->codigo_postal,
+                'ocupacion' => $cliente->ocupacion,
             ];
         });
 
@@ -69,7 +83,11 @@ class ClienteController extends Controller
      */
     public function show($id)
     {
-        $cliente = Cliente::findOrFail($id);
+        $user = auth()->user();
+        
+        $cliente = Cliente::where('id', $id)
+            ->where('id_aseguradora', $user->id_aseguradora)
+            ->firstOrFail();
         
         return response()->json([
             'id' => $cliente->id,
@@ -166,7 +184,11 @@ class ClienteController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $cliente = Cliente::findOrFail($id);
+        $user = auth()->user();
+        
+        $cliente = Cliente::where('id', $id)
+            ->where('id_aseguradora', $user->id_aseguradora)
+            ->firstOrFail();
 
         $validator = Validator::make($request->all(), [
             'nombre' => 'string|max:150',
@@ -211,7 +233,11 @@ class ClienteController extends Controller
      */
     public function destroy($id)
     {
-        $cliente = Cliente::findOrFail($id);
+        $user = auth()->user();
+        
+        $cliente = Cliente::where('id', $id)
+            ->where('id_aseguradora', $user->id_aseguradora)
+            ->firstOrFail();
         
         // Verificar si tiene pólizas asociadas
         $tienePolizas = DB::table('polizas')->where('id_cliente', $id)->exists();

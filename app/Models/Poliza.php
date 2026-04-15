@@ -1,4 +1,5 @@
 <?php
+// app/Models/Poliza.php
 
 namespace App\Models;
 
@@ -29,5 +30,24 @@ class Poliza extends Model
         'fecha_primer_pago', 
         'siguiente_pago', 
         'observaciones',
+        'aviso_enviado_at'  // Agregado si lo necesitas
     ];
+
+    // Relación con cliente
+    public function cliente()
+    {
+        return $this->belongsTo(Cliente::class, 'id_cliente');
+    }
+
+    // Relación con aseguradora
+    public function aseguradora()
+    {
+        return $this->belongsTo(Aseguradora::class, 'id_aseguradora');
+    }
+
+    // Relación con empleado
+    public function empleado()
+    {
+        return $this->belongsTo(Empleado::class, 'id_empleado');
+    }
 }
