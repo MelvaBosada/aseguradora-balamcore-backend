@@ -180,10 +180,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/suscripcion/limite/{tipo}', [SuscripcionController::class, 'verificarLimite']);
 
 
-   // ── SuperAdministrador─────────────────────────────────────
-    Route::get('/dashboard',                             [SuperAdminController::class, 'dashboard']);
-    Route::get('/aseguradoras',                          [SuperAdminController::class, 'aseguradoras']);
-    Route::patch('/aseguradoras/{id}/estatus',           [SuperAdminController::class, 'cambiarEstatusAseguradora']);
+    // ── SuperAdministrador─────────────────────────────────────
+Route::prefix('superadmin')->group(function () {
+    Route::get('/dashboard',                   [SuperAdminController::class, 'dashboard']);
+    Route::get('/aseguradoras',                [SuperAdminController::class, 'aseguradoras']);
+    Route::patch('/aseguradoras/{id}/estatus', [SuperAdminController::class, 'cambiarEstatusAseguradora']);
+});
 
     // IMPORTANTEEEEEEEEEEE 
     // ── Rutas con límites de plan ──────────────────────────
