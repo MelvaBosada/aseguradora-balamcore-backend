@@ -22,6 +22,7 @@ use App\Http\Controllers\SiniestroController;
 use App\Http\Controllers\RenovacionController;
 use App\Http\Controllers\EvaluacionController;
 use Illuminate\Support\Facades\Route;
+ use App\Http\Controllers\SuperAdminController;
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -177,6 +178,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/suscripcion/checkout', [SuscripcionController::class, 'crearCheckout']);
     Route::post('/suscripcion/verificar-pago', [SuscripcionController::class, 'verificarPago']);
     Route::get('/suscripcion/limite/{tipo}', [SuscripcionController::class, 'verificarLimite']);
+
+
+   // ── SuperAdministrador─────────────────────────────────────
+    Route::get('/dashboard',                             [SuperAdminController::class, 'dashboard']);
+    Route::get('/aseguradoras',                          [SuperAdminController::class, 'aseguradoras']);
+    Route::patch('/aseguradoras/{id}/estatus',           [SuperAdminController::class, 'cambiarEstatusAseguradora']);
 
     // IMPORTANTEEEEEEEEEEE 
     // ── Rutas con límites de plan ──────────────────────────
