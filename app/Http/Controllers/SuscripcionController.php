@@ -44,6 +44,11 @@ class SuscripcionController extends Controller
         return response()->json($suscripcion);
     }
 
+    // Activación manual desde el SuperAdmin (botón "Cambiar / renovar plan").
+    // La suscripción anterior pasa a 'renovada' — no 'cancelada' — porque
+    // aquí SÍ hay continuidad de servicio (se está asignando un plan nuevo),
+    // a diferencia de cancelar(), que es cuando alguien corta el servicio
+    // sin que haya un plan nuevo de por medio.
     public function activar(Request $request, $id_aseguradora)
     {
         $request->validate(['id_plan' => 'required|integer']);
@@ -51,13 +56,13 @@ class SuscripcionController extends Controller
         $plan = Plan::findOrFail($request->id_plan);
 
         Suscripcion::where('id_aseguradora', $id_aseguradora)
-            ->whereIn('estatus', ['prueba', 'activo'])
-            ->update(['estatus' => 'cancelado']);
+            ->whereIn('estatus', ['prueba', 'activo', 'activa', 'trial'])
+            ->update(['estatus' => 'renovada']);
 
         $suscripcion = Suscripcion::create([
             'id_aseguradora' => $id_aseguradora,
             'id_plan'        => $plan->id,
-            'estatus'        => 'activo',
+            'estatus'        => 'activa',
             'fecha_inicio'   => Carbon::now(),
             'fecha_fin'      => Carbon::now()->addDays($plan->duracion_dias),
         ]);
@@ -65,10 +70,13 @@ class SuscripcionController extends Controller
         return response()->json(['message' => 'Suscripción activada', 'suscripcion' => $suscripcion]);
     }
 
+    // Cancelación manual real: el usuario decide cortar el servicio.
+    // Aquí sí queda como 'cancelada', porque no hay una suscripción
+    // nueva tomando su lugar.
     public function cancelar($id)
     {
         $suscripcion = Suscripcion::findOrFail($id);
-        $suscripcion->update(['estatus' => 'cancelado']);
+        $suscripcion->update(['estatus' => 'cancelada', 'fecha_cancelacion' => Carbon::now()]);
         return response()->json(['message' => 'Suscripción cancelada']);
     }
 
@@ -213,7 +221,10 @@ class SuscripcionController extends Controller
         return response()->json(['url' => $session->url]);
     }
 
-    // Verificar pago al volver de Stripe (reemplaza al webhook)
+    // Verificar pago al volver de Stripe (reemplaza al webhook).
+    // Cuando el pago es exitoso, la suscripción anterior pasa a
+    // 'renovada' (había continuidad: se pagó y se generó la siguiente),
+    // no 'cancelada' (que implicaría que el servicio se cortó sin reemplazo).
     public function verificarPago(Request $request)
     {
         $request->validate(['session_id' => 'required|string']);
@@ -245,7 +256,7 @@ class SuscripcionController extends Controller
         DB::table('suscripciones')
             ->where('id_aseguradora', $idAseguradora)
             ->whereIn('estatus', ['activa', 'trial'])
-            ->update(['estatus' => 'cancelada', 'fecha_cancelacion' => $now]);
+            ->update(['estatus' => 'renovada', 'fecha_cancelacion' => $now]);
 
         DB::table('suscripciones')->insert([
             'id_aseguradora'         => $idAseguradora,
@@ -253,8 +264,8 @@ class SuscripcionController extends Controller
             'estatus'                => 'activa',
             'es_trial'               => false,
             'fecha_inicio'           => $now,
-            'periodo'                => $periodo,  
-            'fecha_fin'              => $now->copy()->addDays($duracion), // ← FALTA ESTA
+            'periodo'                => $periodo,
+            'fecha_fin'              => $now->copy()->addDays($duracion),
             'fecha_fin_trial'        => $now,
             'fecha_inicio_plan'      => $now,
             'fecha_fin_plan'         => $now->copy()->addDays($duracion),
