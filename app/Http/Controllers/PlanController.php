@@ -9,29 +9,53 @@ use Carbon\Carbon;
 
 class PlanController extends Controller
 {
-   public function index()
-{
-    $planes = Plan::where('estatus', 'activo')
-        ->select(
-            'id', 'nombre', 'descripcion',
-            'precio', 'precio_anual',
-            'duracion_dias', 'dias_prueba',
-            'stripe_price_id',
-            'limite_polizas_vencer_dia',
-            'limite_siniestros_mes',
-            'limite_bienes_por_cliente',
-            'pdf_ilimitado',
-            'soporte_prioritario',
-            'estatus'
-        )
-        ->get();
+    public function index()
+    {
+        $planes = DB::table('planes')
+            ->leftJoin('planxmodulo', 'planes.id', '=', 'planxmodulo.id_plan')
+            ->select(
+                'planes.id', 'planes.nombre', 'planes.descripcion',
+                'planes.precio', 'planes.precio_anual',
+                'planes.duracion_dias', 'planes.dias_prueba',
+                'planes.stripe_price_id',
+                'planes.limite_polizas_vencer_dia',
+                'planes.limite_siniestros_mes',
+                'planes.limite_bienes_por_cliente',
+                'planes.pdf_ilimitado',
+                'planes.soporte_prioritario',
+                'planes.estatus',
+                DB::raw('COUNT(planxmodulo.id_modulo) as modulos_count')
+            )
+            ->where('planes.estatus', 'activo')
+            ->groupBy(
+                'planes.id', 'planes.nombre', 'planes.descripcion',
+                'planes.precio', 'planes.precio_anual',
+                'planes.duracion_dias', 'planes.dias_prueba',
+                'planes.stripe_price_id',
+                'planes.limite_polizas_vencer_dia',
+                'planes.limite_siniestros_mes',
+                'planes.limite_bienes_por_cliente',
+                'planes.pdf_ilimitado',
+                'planes.soporte_prioritario',
+                'planes.estatus'
+            )
+            ->get();
 
-    return response()->json($planes);
-}
+        return response()->json($planes);
+    }
 
     public function show($id)
     {
         $plan = Plan::findOrFail($id);
+
+        $modulos = DB::table('planxmodulo')
+            ->join('modulos', 'planxmodulo.id_modulo', '=', 'modulos.id')
+            ->where('planxmodulo.id_plan', $id)
+            ->select('modulos.*')
+            ->get();
+
+        $plan->modulos = $modulos;
+
         return response()->json($plan);
     }
 
@@ -49,9 +73,15 @@ class PlanController extends Controller
             'nombre'         => $request->nombre,
             'descripcion'    => $request->descripcion ?? null,
             'precio'         => $request->precio,
+            'precio_anual'   => $request->precio_anual ?? null,
             'duracion_dias'  => $request->duracion_dias,
             'dias_prueba'    => $request->dias_prueba ?? 15,
             'stripe_price_id'=> $request->stripe_price_id ?? null,
+            'limite_polizas_vencer_dia' => $request->limite_polizas_vencer_dia ?? null,
+            'limite_siniestros_mes'     => $request->limite_siniestros_mes ?? null,
+            'limite_bienes_por_cliente' => $request->limite_bienes_por_cliente ?? null,
+            'pdf_ilimitado'             => $request->boolean('pdf_ilimitado'),
+            'soporte_prioritario'       => $request->boolean('soporte_prioritario'),
             'estatus'        => 'activo',
             'fecha_creacion' => Carbon::now(),
         ]);
@@ -70,31 +100,5 @@ class PlanController extends Controller
     {
         Plan::findOrFail($id)->delete();
         return response()->json(['message' => 'Plan eliminado']);
-    }
-
-    public function getModulos($id_plan)
-    {
-        $modulos = DB::table('planxmodulo')
-            ->join('modulos', 'planxmodulo.id_modulo', '=', 'modulos.id')
-            ->where('planxmodulo.id_plan', $id_plan)
-            ->select('modulos.*')
-            ->get();
-        return response()->json($modulos);
-    }
-
-    public function asignarModulos(Request $request, $id_plan)
-    {
-        $request->validate(['modulos' => 'required|array']);
-
-        PlanxModulo::where('id_plan', $id_plan)->delete();
-
-        foreach ($request->modulos as $id_modulo) {
-            PlanxModulo::create([
-                'id_plan'   => $id_plan,
-                'id_modulo' => $id_modulo,
-            ]);
-        }
-
-        return response()->json(['message' => 'Módulos asignados correctamente']);
     }
 }

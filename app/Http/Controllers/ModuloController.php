@@ -8,8 +8,18 @@ class ModuloController extends Controller
 {
     public function index()
     {
-        $modulos = Modulo::where('estatus', 'activo')->orderBy('orden')->get();
-        return response()->json($modulos);
+        // Antes solo regresaba estatus='activo'. Para la vista de
+        // administración (SAModulos) necesitamos ver también los
+        // inactivos, para poder reactivarlos desde ahí.
+        // Si necesitas en otro lugar SOLO los activos (ej. el checklist
+        // de asignación en Planes), usa el query param ?solo_activos=1.
+        $query = Modulo::orderBy('orden');
+
+        if (request()->boolean('solo_activos')) {
+            $query->where('estatus', 'activo');
+        }
+
+        return response()->json($query->get());
     }
 
     public function show($id)
@@ -41,6 +51,13 @@ class ModuloController extends Controller
     public function update(Request $request, $id)
     {
         $modulo = Modulo::findOrFail($id);
+
+        $request->validate([
+            'nombre' => 'sometimes|string|max:100',
+            'clave'  => 'sometimes|string|max:50|unique:modulos,clave,' . $id,
+            'orden'  => 'sometimes|integer',
+        ]);
+
         $modulo->update($request->all());
         return response()->json(['message' => 'Módulo actualizado', 'modulo' => $modulo]);
     }

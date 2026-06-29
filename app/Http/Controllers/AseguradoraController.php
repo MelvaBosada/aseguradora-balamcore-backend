@@ -4,20 +4,63 @@ namespace App\Http\Controllers;
 
 use App\Models\Aseguradora;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class AseguradoraController extends Controller
 {
     public function index()
     {
-        $aseguradoras = Aseguradora::all();
+        // Trae todas las aseguradoras y les pega (left join) el plan de su
+        // suscripción ACTIVA más reciente, si tienen una. Si no tienen
+        // suscripción o no está activa, 'plan' y 'estatus_suscripcion'
+        // vienen null — el front ya maneja ese caso como "Sin asignar".
+        $aseguradoras = DB::table('aseguradoras')
+            ->leftJoin('suscripciones', function ($join) {
+                $join->on('suscripciones.id_aseguradora', '=', 'aseguradoras.id')
+                     ->whereIn('suscripciones.estatus', ['activo', 'activa', 'prueba', 'trial']);
+            })
+            ->leftJoin('planes', 'planes.id', '=', 'suscripciones.id_plan')
+            ->select(
+                'aseguradoras.*',
+                'planes.id as plan_id',
+                'planes.nombre as plan',
+                'planes.precio as plan_precio',
+                'suscripciones.estatus as estatus_suscripcion',
+                'suscripciones.fecha_fin as suscripcion_fecha_fin'
+            )
+            // Si una aseguradora tuviera más de una suscripción "activa"
+            // por algún descuido de datos, nos quedamos solo con la más
+            // reciente para no duplicar filas de aseguradora.
+            ->orderBy('aseguradoras.id')
+            ->orderByDesc('suscripciones.id')
+            ->get()
+            ->unique('id')
+            ->values();
+
         return response()->json($aseguradoras);
     }
 
     public function show($id)
     {
         $aseguradora = Aseguradora::findOrFail($id);
-        return response()->json($aseguradora);
+
+        $suscripcion = DB::table('suscripciones')
+            ->join('planes', 'planes.id', '=', 'suscripciones.id_plan')
+            ->where('suscripciones.id_aseguradora', $id)
+            ->whereIn('suscripciones.estatus', ['activo', 'activa', 'prueba', 'trial'])
+            ->select('planes.id as plan_id', 'planes.nombre as plan', 'planes.precio as plan_precio', 'suscripciones.estatus as estatus_suscripcion', 'suscripciones.fecha_fin as suscripcion_fecha_fin')
+            ->orderByDesc('suscripciones.id')
+            ->first();
+
+        $data = $aseguradora->toArray();
+        $data['plan'] = $suscripcion->plan ?? null;
+        $data['plan_id'] = $suscripcion->plan_id ?? null;
+        $data['plan_precio'] = $suscripcion->plan_precio ?? null;
+        $data['estatus_suscripcion'] = $suscripcion->estatus_suscripcion ?? null;
+        $data['suscripcion_fecha_fin'] = $suscripcion->suscripcion_fecha_fin ?? null;
+
+        return response()->json($data);
     }
 
     public function store(Request $request)

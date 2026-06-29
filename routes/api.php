@@ -22,7 +22,8 @@ use App\Http\Controllers\SiniestroController;
 use App\Http\Controllers\RenovacionController;
 use App\Http\Controllers\EvaluacionController;
 use Illuminate\Support\Facades\Route;
- use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\SuperAdminController;
+use App\Http\Controllers\PlanxModuloController;
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -152,14 +153,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/ultimos-siniestros', [DashboardController::class, 'ultimosSiniestros']);
     });
 
-    // ── Planes ────────────────────────────────────────────
+        // ── Planes ────────────────────────────────────────────
     Route::get('/planes', [PlanController::class, 'index']);
     Route::get('/planes/{id}', [PlanController::class, 'show']);
     Route::post('/planes', [PlanController::class, 'store']);
     Route::put('/planes/{id}', [PlanController::class, 'update']);
     Route::delete('/planes/{id}', [PlanController::class, 'destroy']);
-    Route::get('/planes/{id_plan}/modulos', [PlanController::class, 'getModulos']);
-    Route::post('/planes/{id_plan}/modulos', [PlanController::class, 'asignarModulos']);
+
+    // ── PlanesxModulo ────────────────────────────────────────────
+    Route::get('/planes/{id_plan}/modulos', [PlanxModuloController::class, 'getModulosPorPlan']);   // ← cambia
+    Route::post('/planes/{id_plan}/modulos', [PlanxModuloController::class, 'asignarModulos']);     // ← cambia
 
     // ── Módulos ───────────────────────────────────────────
     Route::get('/modulos', [ModuloController::class, 'index']);
@@ -167,6 +170,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/modulos', [ModuloController::class, 'store']);
     Route::put('/modulos/{id}', [ModuloController::class, 'update']);
     Route::delete('/modulos/{id}', [ModuloController::class, 'destroy']);
+
+    
 
     // ── Suscripciones ─────────────────────────────────────
     Route::get('/suscripciones', [SuscripcionController::class, 'index']);
