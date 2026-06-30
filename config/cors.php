@@ -1,15 +1,23 @@
 <?php
 
 return [
-
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    'allowed_origins' => [
+        'https://aseguradora-balamcore-front.vercel.app',
+    ],
+
+    'allowed_origins_patterns' => [
+        '#^https://aseguradora-balamcore-front-.*\.vercel\.app$#',
+    ],
 
     'allowed_headers' => ['*'],
 
-    'supports_credentials' => true,
+    'exposed_headers' => [],
 
+    'max_age' => 0,
+
+    'supports_credentials' => true,
 ];
