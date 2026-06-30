@@ -16,6 +16,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'permiso' => \App\Http\Middleware\CheckPermiso::class,
             'plan'    => \App\Http\Middleware\CheckPlan::class,
         ]);
+
+        $middleware->redirectGuestsTo(fn ($request) => $request->expectsJson() ? null : '/');
     })
     
     ->withExceptions(function (Exceptions $exceptions): void {
