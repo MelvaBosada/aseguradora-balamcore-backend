@@ -1,0 +1,12 @@
+[90m= [39m[
+    "[32mid[39m",
+    "[32mnombre[39m",
+    "[32mdescripcion[39m",
+    "[32mprecio[39m",
+    "[32mduracion_dias[39m",
+    "[32mdias_prueba[39m",
+    "[32mstripe_price_id[39m",
+    "[32mestatus[39m",
+    "[32mfecha_creacion[39m",
+  ]
+

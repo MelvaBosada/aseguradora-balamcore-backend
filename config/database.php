@@ -44,7 +44,19 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
+        'mysql_local' => [
+            'driver' => 'mysql',
+            'host' => 'host.docker.internal',
+            'port' => '3307',
+            'database' => 'aseguradora_bd',
+            'username' => 'root',
+            'password' => 'santos2004',
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+],
+
         'mysql' => [
+        
             'driver' => 'mysql',
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),
