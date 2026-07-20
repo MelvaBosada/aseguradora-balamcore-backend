@@ -19,7 +19,7 @@ return new class extends Migration
             $table->enum('genero', ['masculino', 'femenino', 'otro']);
             $table->enum('estado_civil', ['soltero', 'casado', 'divorciado', 'viudo', 'union_libre']);
             $table->string('nacionalidad', 50);
-            $table->string('curp', 16);
+            $table->string('curp', 18);
             $table->string('rfc', 13);
             $table->enum('tipo_identificacion', ['ine', 'pasaporte', 'cedula_profesional', 'licencia']);
             $table->string('numero_identificacion', 30);
