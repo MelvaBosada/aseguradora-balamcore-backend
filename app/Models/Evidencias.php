@@ -49,22 +49,26 @@ class Evidencias extends Model
 
     public function siniestro(): BelongsTo
     {
-        return $this->belongsTo(Siniestro::class, 'id_siniestro');
+        // Se mapea 'id_siniestro' (de evidencias) -> 'id' (de siniestros)
+        return $this->belongsTo(Siniestro::class, 'id_siniestro', 'id');
     }
-
+    
     public function empleado(): BelongsTo
     {
-        return $this->belongsTo(Empleado::class, 'id_empleado');
+        // Se mapea 'id_empleado' (de evidencias) -> 'id' (de empleados)
+        return $this->belongsTo(Empleado::class, 'id_empleado', 'id');
     }
-
+    
     public function bien(): BelongsTo
     {
-        return $this->belongsTo(Bien::class, 'id_bien');
+        // Se mapea 'id_bien' (de evidencias) -> 'id' (de bienes)
+        return $this->belongsTo(Bien::class, 'id_bien', 'id');
     }
-
+    
     public function validador(): BelongsTo
     {
-        return $this->belongsTo(Empleado::class, 'id_validador');
+        // Se mapea 'id_validador' (de evidencias) -> 'id' (de empleados)
+        return $this->belongsTo(Empleado::class, 'id_validador', 'id');
     }
 
     // -----------------------------------------------------------------

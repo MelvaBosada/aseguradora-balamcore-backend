@@ -16,8 +16,27 @@ class EvidenciasController extends Controller
      * GET /evidencias?id_siniestro=1&estatus_validacion=pendiente
      */
     public function index(Request $request): JsonResponse
-    {
-        $query = Evidencias::query()->with(['siniestro', 'empleado', 'bien', 'validador']);
+{
+    try {
+        // Cargar relaciones de forma segura
+        $query = Evidencias::query();
+
+        // Cargar relaciones solo si están definidas en el modelo
+        if (method_exists(Evidencias::class, 'siniestro')) $query->with('siniestro');
+        if (method_exists(Evidencias::class, 'empleado')) $query->with('empleado');
+        if (method_exists(Evidencias::class, 'bien')) $query->with('bien');
+        if (method_exists(Evidencias::class, 'validador')) $query->with('validador');
+
+        // Búsqueda general desde el frontend (React envía ?search=...)
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('nombre_archivo', 'ILIKE', "%{$search}%")
+                  ->orWhere('categoria', 'ILIKE', "%{$search}%")
+                  ->orWhere('tipo', 'ILIKE', "%{$search}%")
+                  ->orWhere('descripcion', 'ILIKE', "%{$search}%");
+            });
+        }
 
         if ($request->filled('id_siniestro')) {
             $query->where('id_siniestro', $request->integer('id_siniestro'));
@@ -35,10 +54,19 @@ class EvidenciasController extends Controller
             $query->where('tipo', $request->string('tipo'));
         }
 
-        $evidencias = $query->orderByDesc('fecha_subida')->paginate(20);
+        $perPage = $request->integer('per_page', 20);
+        $evidencias = $query->orderByDesc('fecha_subida')->paginate($perPage);
 
-        return response()->json($evidencias);
+        return response()->json($evidencias, 200);
+
+    } catch (\Exception $e) {
+        // En lugar de dar error 500 sin respuesta, devuelve el detalle JSON
+        return response()->json([
+            'message' => 'Error al consultar evidencias',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Ver el detalle de una evidencia.
