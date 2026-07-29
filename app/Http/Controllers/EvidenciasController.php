@@ -59,11 +59,12 @@ class EvidenciasController extends Controller
 
         return response()->json($evidencias, 200);
 
-    } catch (\Exception $e) {
-        // En lugar de dar error 500 sin respuesta, devuelve el detalle JSON
+    } catch (\Throwable $e) {   // 👈 AQUÍ el cambio (antes decía \Exception)
         return response()->json([
             'message' => 'Error al consultar evidencias',
-            'error' => $e->getMessage()
+            'error' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
         ], 500);
     }
 }

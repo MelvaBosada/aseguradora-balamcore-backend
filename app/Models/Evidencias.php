@@ -60,10 +60,10 @@ class Evidencias extends Model
     }
     
     public function bien(): BelongsTo
-    {
-        // Se mapea 'id_bien' (de evidencias) -> 'id' (de bienes)
-        return $this->belongsTo(Bien::class, 'id_bien', 'id');
-    }
+{
+    // Se mapea 'id_bien' (de evidencias) -> 'id' (de bienes)
+    return $this->belongsTo(Bienes::class, 'id_bien', 'id'); // antes decía Bien::class
+}
     
     public function validador(): BelongsTo
     {
