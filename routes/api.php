@@ -94,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bienes', [BienesController::class, 'store']);
     Route::put('/bienes/{id}', [BienesController::class, 'update']);
     Route::delete('/bienes/{id}', [BienesController::class, 'destroy']);
+    Route::delete('bienes/{id}/foto', [BienesController::class, 'destroyFoto']);
 
     // ── Cobertura ─────────────────────────────────
     Route::get('/coberturas', [CoberturaController::class, 'index']);
