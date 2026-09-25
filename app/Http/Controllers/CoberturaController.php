@@ -13,7 +13,9 @@ class CoberturaController extends Controller
     public function index()
     {
         try {
-            $coberturas = Cobertura::orderBy('id', 'desc')->get();
+            $coberturas = Cobertura::where('id_aseguradora', auth()->user()->id_aseguradora)
+                ->orderBy('id', 'desc')
+                ->get();
             return response()->json($coberturas, 200);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Error al obtener datos: ' . $e->getMessage()], 500);
@@ -42,7 +44,9 @@ class CoberturaController extends Controller
         }
 
         try {
-            $cobertura = Cobertura::create($request->all());
+            $data = $request->except(['id_aseguradora']);
+            $data['id_aseguradora'] = auth()->user()->id_aseguradora;
+            $cobertura = Cobertura::create($data);
             return response()->json([
                 'message' => 'Cobertura creada con éxito',
                 'data' => $cobertura
@@ -57,7 +61,8 @@ class CoberturaController extends Controller
 
     public function update(Request $request, $id)
     {
-        $cobertura = Cobertura::find($id);
+        $cobertura = Cobertura::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->find($id);
 
         if (!$cobertura) {
             return response()->json(['message' => 'Cobertura no encontrada'], 404);
@@ -82,7 +87,7 @@ class CoberturaController extends Controller
         }
 
         try {
-            $cobertura->update($request->all());
+            $cobertura->update($request->except(['id_aseguradora']));
             
             return response()->json([
                 'message' => 'Cobertura actualizada correctamente',
@@ -98,7 +103,8 @@ class CoberturaController extends Controller
 
     public function destroy($id)
     {
-        $cobertura = Cobertura::find($id);
+        $cobertura = Cobertura::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->find($id);
 
         if (!$cobertura) {
             return response()->json(['message' => 'No encontrada'], 404);

@@ -19,9 +19,16 @@ class Plan extends Model
         'limite_polizas_vencer_dia',
         'limite_siniestros_mes',
         'limite_bienes_por_cliente',
+        'limite_roles',
         'pdf_ilimitado',
         'soporte_prioritario',
         'estatus',
         'fecha_creacion',
+    ];
+
+    protected $casts = [
+        'limite_roles' => 'integer',
+        'pdf_ilimitado' => 'boolean',
+        'soporte_prioritario' => 'boolean',
     ];
 }

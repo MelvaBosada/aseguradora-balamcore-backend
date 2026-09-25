@@ -21,6 +21,7 @@ class PlanController extends Controller
                 'planes.limite_polizas_vencer_dia',
                 'planes.limite_siniestros_mes',
                 'planes.limite_bienes_por_cliente',
+                'planes.limite_roles',
                 'planes.pdf_ilimitado',
                 'planes.soporte_prioritario',
                 'planes.estatus',
@@ -35,6 +36,7 @@ class PlanController extends Controller
                 'planes.limite_polizas_vencer_dia',
                 'planes.limite_siniestros_mes',
                 'planes.limite_bienes_por_cliente',
+                'planes.limite_roles',
                 'planes.pdf_ilimitado',
                 'planes.soporte_prioritario',
                 'planes.estatus'
@@ -67,6 +69,7 @@ class PlanController extends Controller
             'precio'        => 'required|numeric',
             'duracion_dias' => 'required|integer',
             'dias_prueba'   => 'nullable|integer',
+            'limite_roles'  => 'nullable|integer|min:0',
         ]);
 
         $plan = Plan::create([
@@ -80,6 +83,7 @@ class PlanController extends Controller
             'limite_polizas_vencer_dia' => $request->limite_polizas_vencer_dia ?? null,
             'limite_siniestros_mes'     => $request->limite_siniestros_mes ?? null,
             'limite_bienes_por_cliente' => $request->limite_bienes_por_cliente ?? null,
+            'limite_roles'              => $request->input('limite_roles', 0),
             'pdf_ilimitado'             => $request->boolean('pdf_ilimitado'),
             'soporte_prioritario'       => $request->boolean('soporte_prioritario'),
             'estatus'        => 'activo',

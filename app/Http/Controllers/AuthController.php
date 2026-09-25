@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Aseguradora;
 use App\Models\Usuario;
+use App\Models\Rol;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -83,9 +84,16 @@ class AuthController extends Controller
 
         $aseguradora = json_decode($resAseguradora->getContent())->aseguradora;
 
+        // El AseguradoraObserver ya creó los roles base (Administrador, Ajustador)
+        // para ESTA aseguradora. Buscamos el id real de su "Administrador"
+        // en vez de asumir que siempre es 1.
+        $rolAdmin = Rol::where('aseguradora_id', $aseguradora->id)
+            ->where('nombre', 'Administrador')
+            ->firstOrFail();
+
         $request->merge([
             'id_aseguradora' => $aseguradora->id,
-            'id_rol'         => 1,
+            'id_rol'         => $rolAdmin->id,
         ]);
 
         $usuarioController = new UsuarioController();
@@ -159,6 +167,7 @@ class AuthController extends Controller
                 'planes.limite_polizas_vencer_dia',
                 'planes.limite_siniestros_mes',
                 'planes.limite_bienes_por_cliente',
+                'planes.limite_roles',
                 'planes.pdf_ilimitado',
                 'planes.soporte_prioritario',
             )
