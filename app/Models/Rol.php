@@ -12,5 +12,26 @@ class Rol extends Model
 
     protected $fillable = [
         'nombre',
+        'aseguradora_id',
+        'es_base',
     ];
+
+    protected $casts = [
+        'es_base' => 'boolean',
+    ];
+
+    protected $appends = [
+        'puede_editar',
+        'puede_eliminar',
+    ];
+
+    public function getPuedeEditarAttribute(): bool
+    {
+        return !$this->es_base;
+    }
+
+    public function getPuedeEliminarAttribute(): bool
+    {
+        return !$this->es_base;
+    }
 }

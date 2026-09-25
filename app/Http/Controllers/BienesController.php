@@ -11,7 +11,11 @@ class BienesController extends Controller
 {
     public function index()
     {
-        return response()->json(Bienes::orderBy('id', 'asc')->get());
+        return response()->json(
+            Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+                ->orderBy('id', 'asc')
+                ->get()
+        );
     }
 
     public function store(Request $request)
@@ -27,7 +31,17 @@ class BienesController extends Controller
         }
 
         try {
-            $bien = Bienes::create($request->all());
+            $cliente = Cliente::where('id', $request->id_cliente)
+                ->where('id_aseguradora', auth()->user()->id_aseguradora)
+                ->first();
+
+            if (!$cliente) {
+                return response()->json(['message' => 'Cliente no encontrado'], 404);
+            }
+
+            $data = $request->except(['id_aseguradora']);
+            $data['id_aseguradora'] = auth()->user()->id_aseguradora;
+            $bien = Bienes::create($data);
 
             return response()->json([
                 'message' => 'Success',
@@ -43,7 +57,8 @@ class BienesController extends Controller
 
     public function show($id)
     {
-        $bien = Bienes::find($id);
+        $bien = Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->find($id);
 
         if (!$bien) {
             return response()->json(['message' => 'Not found'], 404);
@@ -54,14 +69,15 @@ class BienesController extends Controller
 
     public function update(Request $request, $id)
     {
-        $bien = Bienes::find($id);
+        $bien = Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->find($id);
 
         if (!$bien) {
             return response()->json(['message' => 'Not found'], 404);
         }
 
         try {
-            $bien->update($request->all());
+            $bien->update($request->except(['id_aseguradora', 'id_cliente']));
 
             return response()->json([
                 'message' => 'Updated',
@@ -77,7 +93,8 @@ class BienesController extends Controller
 
     public function destroy($id)
     {
-        $bien = Bienes::find($id);
+        $bien = Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->find($id);
 
         if (!$bien) {
             return response()->json(['message' => 'Not found'], 404);
@@ -102,14 +119,17 @@ public function getByRfcCliente(Request $request)
         $request->validate(['rfc' => 'required|string|max:13']);
         
         // Buscar cliente por RFC
-        $cliente = Cliente::where('rfc', $request->rfc)->first();
+        $cliente = Cliente::where('rfc', $request->rfc)
+            ->where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->first();
         
         if (!$cliente) {
             return response()->json(['message' => 'Cliente no encontrado'], 404);
         }
         
         // Obtener bienes del cliente que NO están asociados a ninguna póliza
-        $bienes = Bienes::where('id_cliente', $cliente->id)
+        $bienes = Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->where('id_cliente', $cliente->id)
             ->where(function($query) {
                 $query->whereNull('id_poliza')
                       ->orWhere('id_poliza', 0);
@@ -130,14 +150,18 @@ public function getByRfcCliente(Request $request)
 public function getByClienteId($clienteId)
 {
     try {
-        $cliente = Cliente::find($clienteId);
+        $cliente = Cliente::where('id', $clienteId)
+            ->where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->first();
         
         if (!$cliente) {
             return response()->json(['message' => 'Cliente no encontrado'], 404);
         }
         
         // Mostrar TODOS los bienes del cliente, sin filtrar por id_poliza
-        $bienes = Bienes::where('id_cliente', $clienteId)->get();
+        $bienes = Bienes::where('id_aseguradora', auth()->user()->id_aseguradora)
+            ->where('id_cliente', $clienteId)
+            ->get();
         
         return response()->json($bienes);
         
