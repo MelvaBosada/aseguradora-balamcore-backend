@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Indemnizaciones;
+use App\Models\Siniestro;
 use Illuminate\Support\Facades\DB;
 
 class IndemnizacionesController extends Controller
@@ -25,6 +26,7 @@ class IndemnizacionesController extends Controller
                 ->join('evaluaciones as ev', 'i.id_evaluaciones', '=', 'ev.id')
                 // Relación con Empleados (para el nombre del ajustador que evaluó)
                 ->join('empleados as e', 'ev.id_empleado', '=', 'e.id')
+                ->where('s.id_aseguradora', auth()->user()->id_aseguradora)
                 ->select(
                     'i.*',
                     'r.nombre_reportante as asegurado_nombre',
@@ -58,6 +60,14 @@ class IndemnizacionesController extends Controller
         try {
             $data = $request->all();
 
+            $siniestro = Siniestro::where('id', $request->id_siniestro)
+                ->where('id_aseguradora', auth()->user()->id_aseguradora)
+                ->first();
+
+            if (!$siniestro) {
+                return response()->json(['message' => 'Siniestro no encontrado'], 404);
+            }
+
             // Limpiamos campos que el Front añade para la tabla o PDF pero no existen en la tabla principal
             $camposExtras = [
                 'siniestro_folio', 'pago_formateado', 'estado_pago', 
@@ -90,6 +100,7 @@ class IndemnizacionesController extends Controller
             ->join('reportes as r', 's.id_reporte', '=', 'r.id')
             ->join('evaluaciones as ev', 'i.id_evaluaciones', '=', 'ev.id')
             ->join('empleados as e', 'ev.id_empleado', '=', 'e.id')
+            ->where('s.id_aseguradora', auth()->user()->id_aseguradora)
             ->select('i.*', 'r.nombre_reportante as asegurado_nombre', 's.numero_siniestro', 'e.nombre as ajustador_nom')
             ->where('i.id', $id)
             ->first();
@@ -106,7 +117,9 @@ class IndemnizacionesController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            $indemnizacion = Indemnizaciones::findOrFail($id);
+            $indemnizacion = Indemnizaciones::whereHas('siniestro', function ($query) {
+                $query->where('id_aseguradora', auth()->user()->id_aseguradora);
+            })->findOrFail($id);
             $data = $request->all();
 
             // Limpieza preventiva de campos que vienen del mapeo del frontend
@@ -115,6 +128,16 @@ class IndemnizacionesController extends Controller
             // También quitamos los alias del join si el front los devuelve
             $alias = ['asegurado_nombre', 'poliza_numero', 'numero_siniestro', 'ajustador_nom'];
             foreach ($alias as $campo) { unset($data[$campo]); }
+
+            if (array_key_exists('id_siniestro', $data)) {
+                $siniestro = Siniestro::where('id', $data['id_siniestro'])
+                    ->where('id_aseguradora', auth()->user()->id_aseguradora)
+                    ->first();
+
+                if (!$siniestro) {
+                    return response()->json(['message' => 'Siniestro no encontrado'], 404);
+                }
+            }
 
             $indemnizacion->update($data);
             return response()->json(['message' => 'Actualización exitosa']);
@@ -129,7 +152,9 @@ class IndemnizacionesController extends Controller
     public function destroy($id)
     {
         try {
-            $indemnizacion = Indemnizaciones::findOrFail($id);
+            $indemnizacion = Indemnizaciones::whereHas('siniestro', function ($query) {
+                $query->where('id_aseguradora', auth()->user()->id_aseguradora);
+            })->findOrFail($id);
             $indemnizacion->delete();
             return response()->json(['message' => 'Registro eliminado']);
         } catch (\Exception $e) {
