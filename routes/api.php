@@ -68,14 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Siniestros ──────────────────────────────────────
     Route::get('/siniestros', [SiniestroController::class, 'index']);
+    Route::get('/siniestros/reportes/por-id/{reporteId}', [SiniestroController::class, 'getReportePorId']);
+    Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
+    Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
+    Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
     Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto']);
     Route::post('/siniestros', [SiniestroController::class, 'store']);
     Route::put('/siniestros/{id}', [SiniestroController::class, 'update']);
     Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy']);
-    Route::get('/siniestros/test/{id}', [SiniestroController::class, 'testDetalle']);
-    Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
-    Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
-    Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
 
     // ── Renovaciones de Pólizas ────────────────────────────
     Route::get('/renovaciones', [RenovacionController::class, 'index']);
