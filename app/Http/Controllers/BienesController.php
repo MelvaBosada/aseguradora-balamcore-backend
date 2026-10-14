@@ -10,9 +10,11 @@ use App\Models\Cliente;
 class BienesController extends Controller
 {
     public function index()
-    {
-        return response()->json(Bienes::orderBy('id', 'asc')->get());
-    }
+{
+    return response()->json(
+        Bienes::orderBy('id', 'asc')->get()
+    );
+}
 
     public function store(Request $request)
     {
@@ -20,6 +22,7 @@ class BienesController extends Controller
             'id_cliente' => 'required|integer',
             'tipo'       => 'required|string',
             'valor'      => 'required|numeric',
+            'foto'       => 'nullable|image|max:5120', // máx 5MB
         ]);
 
         if ($validator->fails()) {
@@ -27,7 +30,17 @@ class BienesController extends Controller
         }
 
         try {
-            $bien = Bienes::create($request->all());
+            $data = $request->except('foto');
+
+            if ($request->hasFile('foto')) {
+                $file = $request->file('foto');
+                $data['foto']         = base64_encode(file_get_contents($file->getRealPath()));
+                $data['foto_nombre']  = $file->getClientOriginalName();
+                $data['foto_tipo']    = $file->getMimeType();
+                $data['foto_tamanio'] = $file->getSize();
+            }
+
+            $bien = Bienes::create($data);
 
             return response()->json([
                 'message' => 'Success',
@@ -60,8 +73,26 @@ class BienesController extends Controller
             return response()->json(['message' => 'Not found'], 404);
         }
 
+        $validator = Validator::make($request->all(), [
+            'foto' => 'nullable|image|max:5120',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
         try {
-            $bien->update($request->all());
+            $data = $request->except('foto');
+
+            if ($request->hasFile('foto')) {
+                $file = $request->file('foto');
+                $data['foto']         = base64_encode(file_get_contents($file->getRealPath()));
+                $data['foto_nombre']  = $file->getClientOriginalName();
+                $data['foto_tipo']    = $file->getMimeType();
+                $data['foto_tamanio'] = $file->getSize();
+            }
+
+            $bien->update($data);
 
             return response()->json([
                 'message' => 'Updated',
@@ -94,55 +125,79 @@ class BienesController extends Controller
         }
     }
 
-    // app/Http/Controllers/BienesController.php
+    // Borra solo la foto, sin eliminar el bien completo
+    public function destroyFoto($id)
+    {
+        $bien = Bienes::find($id);
 
-public function getByRfcCliente(Request $request)
-{
-    try {
-        $request->validate(['rfc' => 'required|string|max:13']);
-        
-        // Buscar cliente por RFC
-        $cliente = Cliente::where('rfc', $request->rfc)->first();
-        
-        if (!$cliente) {
-            return response()->json(['message' => 'Cliente no encontrado'], 404);
+        if (!$bien) {
+            return response()->json(['message' => 'Not found'], 404);
         }
-        
-        // Obtener bienes del cliente que NO están asociados a ninguna póliza
-        $bienes = Bienes::where('id_cliente', $cliente->id)
-            ->where(function($query) {
-                $query->whereNull('id_poliza')
-                      ->orWhere('id_poliza', 0);
-            })
-            ->get();
-        
-        return response()->json([
-            'cliente_id' => $cliente->id,
-            'cliente_nombre' => $cliente->nombre . ' ' . $cliente->apellidos,
-            'bienes' => $bienes
-        ]);
-        
-    } catch (\Exception $e) {
-        return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
-    }
-}
 
-public function getByClienteId($clienteId)
-{
-    try {
-        $cliente = Cliente::find($clienteId);
-        
-        if (!$cliente) {
-            return response()->json(['message' => 'Cliente no encontrado'], 404);
+        try {
+            $bien->update([
+                'foto' => null,
+                'foto_nombre' => null,
+                'foto_tipo' => null,
+                'foto_tamanio' => null,
+            ]);
+
+            return response()->json(['message' => 'Foto eliminada']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error',
+                'error' => $e->getMessage()
+            ], 500);
         }
-        
-        // Mostrar TODOS los bienes del cliente, sin filtrar por id_poliza
-        $bienes = Bienes::where('id_cliente', $clienteId)->get();
-        
-        return response()->json($bienes);
-        
-    } catch (\Exception $e) {
-        return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
     }
-}
+
+    public function getByRfcCliente(Request $request)
+    {
+        try {
+            $request->validate(['rfc' => 'required|string|max:13']);
+
+            $cliente = Cliente::where('rfc', $request->rfc)->first();
+
+            if (!$cliente) {
+                return response()->json(['message' => 'Cliente no encontrado'], 404);
+            }
+
+            $bienes = Bienes::where('id_cliente', $cliente->id)
+                ->where(function($query) {
+                    $query->whereNull('id_poliza')
+                          ->orWhere('id_poliza', 0);
+                })
+                ->get()
+                ->makeHidden(['foto', 'foto_url']);
+
+            return response()->json([
+                'cliente_id' => $cliente->id,
+                'cliente_nombre' => $cliente->nombre . ' ' . $cliente->apellidos,
+                'bienes' => $bienes
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function getByClienteId($clienteId)
+    {
+        try {
+            $cliente = Cliente::find($clienteId);
+
+            if (!$cliente) {
+                return response()->json(['message' => 'Cliente no encontrado'], 404);
+            }
+
+            $bienes = Bienes::where('id_cliente', $clienteId)
+                ->get()
+                ->makeHidden(['foto', 'foto_url']);
+
+            return response()->json($bienes);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
 }

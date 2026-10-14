@@ -24,6 +24,7 @@ use App\Http\Controllers\EvaluacionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\PlanxModuloController;
+use App\Http\Controllers\EvidenciasController;
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -67,14 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Siniestros ──────────────────────────────────────
     Route::get('/siniestros', [SiniestroController::class, 'index']);
+    Route::get('/siniestros/reportes/por-id/{reporteId}', [SiniestroController::class, 'getReportePorId']);
+    Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
+    Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
+    Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
     Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto']);
     Route::post('/siniestros', [SiniestroController::class, 'store']);
     Route::put('/siniestros/{id}', [SiniestroController::class, 'update']);
     Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy']);
-    Route::get('/siniestros/test/{id}', [SiniestroController::class, 'testDetalle']);
-    Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
-    Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
-    Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
 
     // ── Renovaciones de Pólizas ────────────────────────────
     Route::get('/renovaciones', [RenovacionController::class, 'index']);
@@ -93,6 +94,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/bienes', [BienesController::class, 'store']);
     Route::put('/bienes/{id}', [BienesController::class, 'update']);
     Route::delete('/bienes/{id}', [BienesController::class, 'destroy']);
+    Route::delete('bienes/{id}/foto', [BienesController::class, 'destroyFoto']);
 
     // ── Cobertura ─────────────────────────────────
     Route::get('/coberturas', [CoberturaController::class, 'index']);
@@ -171,7 +173,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/modulos/{id}', [ModuloController::class, 'update']);
     Route::delete('/modulos/{id}', [ModuloController::class, 'destroy']);
 
-    
+    // ── Evidencias ─────────────────────────────────────
+    Route::get('/evidencias', [EvidenciasController::class, 'index']);
+    Route::get('/evidencias/{id}', [EvidenciasController::class, 'show']);
+    Route::post('/evidencias', [EvidenciasController::class, 'store']);
+    Route::put('/evidencias/{id}', [EvidenciasController::class, 'update']);
+    Route::delete('/evidencias/{id}', [EvidenciasController::class, 'destroy']);
+    Route::post('/evidencias/{id}/validar', [EvidenciasController::class, 'validar']);
+    Route::get('/evidencias/{id}/descargar', [EvidenciasController::class, 'descargar']);
+    Route::get('/siniestros/{id_siniestro}/evidencias', [EvidenciasController::class, 'getBySiniestro']);
 
     // ── Suscripciones ─────────────────────────────────────
     Route::get('/suscripciones', [SuscripcionController::class, 'index']);

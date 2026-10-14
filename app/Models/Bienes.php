@@ -17,19 +17,29 @@ class Bienes extends Model
         'uso_inueble', 'colonia', 'numero_exterior', 'numero_interior', 'metros_cuadrados', 
         'num_pisos', 'tipo_construccion', 'anio_construccion', 'numero_escritura', 'ubicacion', 
         'tipo_electronico', 'numero_imei', 'color_electronico', 'tipo_maquinaria', 
-        'uso_maquinaria', 'estatus'
+        'uso_maquinaria', 'estatus',
+        'foto', 'foto_nombre', 'foto_tipo', 'foto_tamanio',
     ];
-// app/Models/Bienes.php
 
-public function cliente()
-{
-    return $this->belongsTo(Cliente::class, 'id_cliente');
-}
+    // Agrega 'foto_url' automáticamente cuando el modelo se convierte a JSON
+    protected $appends = ['foto_url'];
 
-public function poliza()
-{
-    return $this->belongsTo(Poliza::class, 'id_poliza');
-}
-    
-}
+    public function cliente()
+    {
+        return $this->belongsTo(Cliente::class, 'id_cliente');
+    }
 
+    public function poliza()
+    {
+        return $this->belongsTo(Poliza::class, 'id_poliza');
+    }
+
+    // Arma el data-uri listo para usarse directo en <img src="">
+    public function getFotoUrlAttribute()
+    {
+        if (!$this->foto || !$this->foto_tipo) {
+            return null;
+        }
+        return "data:{$this->foto_tipo};base64,{$this->foto}";
+    }
+}
