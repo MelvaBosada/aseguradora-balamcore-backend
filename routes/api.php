@@ -24,6 +24,7 @@ use App\Http\Controllers\EvaluacionController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\PlanxModuloController;
+use App\Http\Controllers\ExportController;
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -52,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/{id}', [ReportesController::class, 'destroy']); 
     });
 
-    // ── Clientes ─────────────────────────────────────
+       // ── Clientes ─────────────────────────────────────
     Route::get('/clientes', [ClienteController::class, 'index']);
     Route::get('/clientes/{id}', [ClienteController::class, 'show']);
     Route::post('/clientes', [ClienteController::class, 'store']);
@@ -186,11 +187,25 @@ Route::middleware('auth:sanctum')->group(function () {
 
 
     // ── SuperAdministrador─────────────────────────────────────
-Route::prefix('superadmin')->group(function () {
+    Route::prefix('superadmin')->group(function () {
     Route::get('/dashboard',                   [SuperAdminController::class, 'dashboard']);
     Route::get('/aseguradoras',                [SuperAdminController::class, 'aseguradoras']);
     Route::patch('/aseguradoras/{id}/estatus', [SuperAdminController::class, 'cambiarEstatusAseguradora']);
-});
+    });
+
+     
+        // ── Exportaciones (Excel / CSV / PDF) de los catálogos ──────────
+    foreach (config('exportables', []) as $slug => $cfg) {
+        $middleware = !empty($cfg['permiso']) ? ['permiso:' . $cfg['permiso']] : [];
+
+        Route::get("/exportar/{$slug}", [ExportController::class, 'exportar'])
+            ->defaults('catalogo', $slug)
+            ->middleware($middleware);
+
+        Route::get("/exportar/{$slug}/vista", [ExportController::class, 'vista'])
+            ->defaults('catalogo', $slug)
+            ->middleware($middleware);
+    }
 
     // IMPORTANTEEEEEEEEEEE 
     // ── Rutas con límites de plan ──────────────────────────
