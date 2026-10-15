@@ -200,6 +200,65 @@ class SiniestroController extends Controller
             return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
         }
     }
+    
+    public function getReportePorId($reporteId)
+    {
+        try {
+            $user = auth()->user();
+    
+            $reporte = Reportes::where('id', $reporteId)->firstOrFail();
+    
+            $poliza = Poliza::where('id', $reporte->id_poliza)
+                ->where('id_aseguradora', $user->id_aseguradora)
+                ->firstOrFail();
+    
+            $cliente = Cliente::where('id', $poliza->id_cliente)
+                ->where('id_aseguradora', $user->id_aseguradora)
+                ->firstOrFail();
+    
+            return response()->json([
+                'cliente' => [
+                    'id' => $cliente->id,
+                    'rfc' => $cliente->rfc,
+                    'nombre' => $cliente->nombre,
+                    'apellido' => $cliente->apellidos,
+                ],
+                'polizas' => [
+                    [
+                        'id' => $poliza->id,
+                        'numero_poliza' => $poliza->numero_poliza,
+                        'tipo' => $poliza->tipo,
+                    ],
+                ],
+                'reportes' => [
+                    [
+                        'id' => $reporte->id,
+                        'numero_reporte' => 'REP-' .
+                            str_pad($reporte->id, 6, '0', STR_PAD_LEFT),
+                        'id_poliza' => $poliza->id,
+                        'numero_poliza' => $poliza->numero_poliza,
+                        'fecha_reporte' => $reporte->fecha_reporte,
+                        'descripcion' => $reporte->descripcion,
+                    ],
+                ],
+                'reporte_actual' => [
+                    'id' => $reporte->id,
+                    'id_poliza' => $poliza->id,
+                    'numero_poliza' => $poliza->numero_poliza,
+                ],
+            ]);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'message' => 'No se encontró el reporte, la póliza o el cliente asociado.'
+            ], 404);
+        } catch (\Exception $e) {
+            Log::error('Error en getReportePorId: ' . $e->getMessage());
+    
+            return response()->json([
+                'message' => 'Error al consultar el reporte.'
+            ], 500);
+        }
+    }
 
     public function store(Request $request)
     {
