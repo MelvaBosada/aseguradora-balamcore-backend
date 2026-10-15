@@ -25,6 +25,7 @@ WORKDIR /var/www/html
 COPY . .
 
 # Instalar las dependencias de producción de Laravel
+RUN apk add --no-cache libzip-dev && docker-php-ext-install zip
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Configurar permisos correctos para Laravel
