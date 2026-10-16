@@ -12,17 +12,20 @@ class Bienes extends Model
     protected $fillable = [
         'id_aseguradora', 'id_cliente', 'id_poliza', 'tipo', 'descripcion', 'marca', 'modelo', 
         'numero_serie', 'valor', 'nivel_riesgo', 'fecha_adquisicion', 'estado_bienes', 
-        'numero_factura', 'proveedor', 'tipo_vehiculo', 'anio', 'color', 'numero_placas', 
+        'numero_factura', 'proveedor', 'tipo_vehiculo', 'año', 'color', 'numero_placas', 
         'numero_motor', 'numero_vin', 'tipo_combustible', 'uso_vehiculo', 'tipo_inmueble', 
-        'uso_inueble', 'colonia', 'numero_exterior', 'numero_interior', 'metros_cuadrados', 
-        'num_pisos', 'tipo_construccion', 'anio_construccion', 'numero_escritura', 'ubicacion', 
+        'uso_inmueble', 'colonia', 'numero_exterior', 'numero_interior', 'metros_cuadrados', 
+        'num_pisos', 'tipo_construccion', 'año_construccion', 'numero_escritura', 'ubicacion', 
         'tipo_electronico', 'numero_imei', 'color_electronico', 'tipo_maquinaria', 
-        'uso_maquinaria', 'estatus',
+        'uso_maquinaria', 'ubicacion_operacion',
         'foto', 'foto_nombre', 'foto_tipo', 'foto_tamanio',
     ];
 
     // Agrega 'foto_url' automáticamente cuando el modelo se convierte a JSON
     protected $appends = ['foto_url'];
+
+    // El base64 crudo no viaja en el JSON: foto_url ya trae la misma imagen lista para <img>
+    protected $hidden = ['foto'];
 
     public function cliente()
     {
