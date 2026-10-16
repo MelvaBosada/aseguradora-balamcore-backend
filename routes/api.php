@@ -26,6 +26,7 @@ use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\PlanxModuloController;
 use App\Http\Controllers\EvidenciasController;
 use App\Http\Controllers\ExportController;
+use App\Http\Controllers\MetabaseController;
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -216,6 +217,10 @@ Route::middleware('auth:sanctum')->group(function () {
             ->defaults('catalogo', $slug)
             ->middleware($middleware);
     }
+
+    Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/metabase/embed-url', [MetabaseController::class, 'embedUrl']);
+    });
 
     // IMPORTANTEEEEEEEEEEE 
     // ── Rutas con límites de plan ──────────────────────────

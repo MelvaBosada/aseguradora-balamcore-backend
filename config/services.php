@@ -40,4 +40,10 @@ return [
         'secret' => env('STRIPE_SECRET'),
     ],
 
+    'metabase' => [
+    'url'          => env('METABASE_SITE_URL'),
+    'secret'       => env('METABASE_SECRET_KEY'),
+    'dashboard_id' => (int) env('METABASE_DASHBOARD_ID'),
+    ],
+
 ];
