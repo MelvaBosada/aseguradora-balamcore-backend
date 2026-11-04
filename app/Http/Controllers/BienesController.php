@@ -9,17 +9,20 @@ use App\Models\Cliente;
 
 class BienesController extends Controller
 {
+    // Columnas del cliente que viajan junto con cada bien
+    private const CLIENTE_COLUMNAS = 'cliente:id,nombre,apellidos,rfc,curp,correo,numero_de_telefono,domicilio';
+
     public function index()
-{
-    return response()->json(
-        Bienes::orderBy('id', 'asc')->get()
-    );
-}
+    {
+        return response()->json(
+            Bienes::with(self::CLIENTE_COLUMNAS)->orderBy('id', 'asc')->get()
+        );
+    }
 
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'id_cliente' => 'required|integer',
+            'id_cliente' => 'required|integer|exists:clientes,id',
             'tipo'       => 'required|string',
             'valor'      => 'required|numeric',
             'foto'       => 'nullable|image|max:5120', // máx 5MB
@@ -44,7 +47,7 @@ class BienesController extends Controller
 
             return response()->json([
                 'message' => 'Success',
-                'data' => $bien
+                'data' => $bien->load(self::CLIENTE_COLUMNAS)
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -56,7 +59,7 @@ class BienesController extends Controller
 
     public function show($id)
     {
-        $bien = Bienes::find($id);
+        $bien = Bienes::with(self::CLIENTE_COLUMNAS)->find($id);
 
         if (!$bien) {
             return response()->json(['message' => 'Not found'], 404);
@@ -74,7 +77,8 @@ class BienesController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'foto' => 'nullable|image|max:5120',
+            'id_cliente' => 'sometimes|integer|exists:clientes,id',
+            'foto'       => 'nullable|image|max:5120',
         ]);
 
         if ($validator->fails()) {
@@ -96,7 +100,7 @@ class BienesController extends Controller
 
             return response()->json([
                 'message' => 'Updated',
-                'data' => $bien
+                'data' => $bien->load(self::CLIENTE_COLUMNAS)
             ]);
         } catch (\Exception $e) {
             return response()->json([

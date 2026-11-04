@@ -20,5 +20,20 @@ class Suscripcion extends Model
         'fecha_cancelacion',
         'stripe_subscription_id',
         'observaciones',
+
+        'periodo',
+        'monto_plan',
+        'monto_cobrado',
+        'stripe_payment_intent',
+                'periodo',
+        'monto_plan',
+        'monto_cobrado',
+        'stripe_payment_intent',
+        'cambio_id_plan',
+        'cambio_periodo',
+        'cambio_solicitado_at',
+        'ultimo_aviso_dias',
+        'reembolsado_monto',
+        'reembolsado_at',
     ];
 }

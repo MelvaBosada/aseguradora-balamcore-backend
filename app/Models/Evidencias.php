@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -15,7 +16,6 @@ class Evidencias extends Model
 
     protected $fillable = [
         'id_siniestro',
-        'id_empleado',
         'id_bien',
         'tipo',
         'categoria',
@@ -29,7 +29,6 @@ class Evidencias extends Model
         'latitud',
         'longitud',
         'estatus_validacion',
-        'id_validador',
         'fecha_validacion',
         'motivo_rechazo',
         'fecha_subida',
@@ -43,38 +42,28 @@ class Evidencias extends Model
         'fecha_validacion' => 'datetime',
     ];
 
-    // -----------------------------------------------------------------
-    // Relaciones
-    // -----------------------------------------------------------------
+    // Se agrega al JSON para que el front pueda mostrar la imagen/archivo
+    protected $appends = ['url_archivo'];
 
+    protected function urlArchivo(): Attribute
+    {
+        return Attribute::get(
+            fn () => $this->ruta_archivo ? asset('storage/' . $this->ruta_archivo) : null
+        );
+    }
+
+    // Relaciones
     public function siniestro(): BelongsTo
     {
-        // Se mapea 'id_siniestro' (de evidencias) -> 'id' (de siniestros)
         return $this->belongsTo(Siniestro::class, 'id_siniestro', 'id');
     }
-    
-    public function empleado(): BelongsTo
-    {
-        // Se mapea 'id_empleado' (de evidencias) -> 'id' (de empleados)
-        return $this->belongsTo(Empleado::class, 'id_empleado', 'id');
-    }
-    
+
     public function bien(): BelongsTo
-{
-    // Se mapea 'id_bien' (de evidencias) -> 'id' (de bienes)
-    return $this->belongsTo(Bienes::class, 'id_bien', 'id'); // antes decía Bien::class
-}
-    
-    public function validador(): BelongsTo
     {
-        // Se mapea 'id_validador' (de evidencias) -> 'id' (de empleados)
-        return $this->belongsTo(Empleado::class, 'id_validador', 'id');
+        return $this->belongsTo(Bienes::class, 'id_bien', 'id');
     }
 
-    // -----------------------------------------------------------------
-    // Scopes útiles
-    // -----------------------------------------------------------------
-
+    // Scopes
     public function scopePendientes($query)
     {
         return $query->where('estatus_validacion', 'pendiente');
@@ -90,25 +79,20 @@ class Evidencias extends Model
         return $query->where('id_siniestro', $idSiniestro);
     }
 
-    // -----------------------------------------------------------------
     // Helpers
-    // -----------------------------------------------------------------
-
-    public function marcarComoValidada(int $idValidador): void
+    public function marcarComoValidada(): void
     {
         $this->update([
             'estatus_validacion' => 'validada',
-            'id_validador' => $idValidador,
             'fecha_validacion' => now(),
             'motivo_rechazo' => null,
         ]);
     }
 
-    public function marcarComoRechazada(int $idValidador, string $motivo): void
+    public function marcarComoRechazada(string $motivo): void
     {
         $this->update([
             'estatus_validacion' => 'rechazada',
-            'id_validador' => $idValidador,
             'fecha_validacion' => now(),
             'motivo_rechazo' => $motivo,
         ]);

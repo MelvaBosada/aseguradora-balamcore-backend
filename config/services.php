@@ -38,6 +38,14 @@ return [
     'stripe' => [
         'key'    => env('STRIPE_KEY'),
         'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     ],
 
+        'cron' => [
+        'token' => env('CRON_TOKEN'),
+    ],
+
+        'soporte' => [
+        'correo' => env('SOPORTE_CORREO'),
+    ],
 ];

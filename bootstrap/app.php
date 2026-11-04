@@ -14,12 +14,15 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'permiso' => \App\Http\Middleware\CheckPermiso::class,
-            'plan'    => \App\Http\Middleware\CheckPlan::class,
+            'plan' => \App\Http\Middleware\CheckPlan::class,
+            'suscripcion.vigente' => \App\Http\Middleware\EnsureSuscripcionVigente::class,
         ]);
 
-        $middleware->redirectGuestsTo(fn ($request) => $request->expectsJson() ? null : '/');
+        $middleware->redirectGuestsTo(
+            fn ($request) => $request->expectsJson() ? null : '/'
+        );
     })
-    
+
     ->withExceptions(function (Exceptions $exceptions): void {
         //
     })->create();

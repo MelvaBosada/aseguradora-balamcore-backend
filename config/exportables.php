@@ -58,7 +58,7 @@ return [
         ],
     ],
 
-        /* ─────────────────────────  ASEGURADORAS (solo superadmin)  ───────────────────────── */
+    /* ─────────────────────────  ASEGURADORAS (solo superadmin)  ───────────────────────── */
     'aseguradoras' => [
         'modelo'          => \App\Models\Aseguradora::class,
         'titulo'          => 'Listado de aseguradoras',
@@ -224,6 +224,33 @@ return [
             // 'Teléfono de emergencia' => 'contacto_emergencia_telefono',
         ],
         'pdf' => ['Nombre', 'Apellidos', 'RFC', 'Teléfono', 'Correo', 'Departamento', 'Puesto', 'Estado laboral'],
+    ],
+
+    /* ─────────────────────────  EVIDENCIAS  ───────────────────────── */
+    'evidencias' => [
+        'modelo'   => \App\Models\Evidencias::class,
+        'titulo'   => 'Listado de evidencias',
+        'archivo'  => 'evidencias',
+        'tenant'   => 'siniestro.id_aseguradora',
+        'permiso'  => null,
+        'busqueda' => ['nombre_archivo', 'categoria', 'tipo', 'descripcion'],
+        'filtros'  => ['estatus' => 'estatus_validacion'],
+        'orden'    => ['fecha_subida', 'desc'],
+        'with'     => ['siniestro'],
+        'columnas' => [
+            'Archivo'           => 'nombre_archivo',
+            'Tipo'              => 'tipo',
+            'Categoría'         => 'categoria',
+            'N° de siniestro'   => 'siniestro.numero_siniestro',
+            'Estatus'           => 'estatus_validacion',
+            'Motivo de rechazo' => 'motivo_rechazo',
+            'Descripción'       => 'descripcion',
+            'Formato'           => 'mime_type',
+            'Tamaño'            => 'tamano_legible',
+            'Fecha de subida'   => 'fecha_subida_texto',
+            'Fecha de revisión' => 'fecha_revision_texto',
+        ],
+        'pdf' => ['Archivo', 'Tipo', 'Categoría', 'N° de siniestro', 'Estatus', 'Fecha de subida'],
     ],
 
     /* ─────────────────────────  EVALUACIONES  ───────────────────────── */

@@ -41,27 +41,80 @@ class AseguradoraController extends Controller
         return response()->json($aseguradoras);
     }
 
-    public function show($id)
-    {
-        $aseguradora = Aseguradora::findOrFail($id);
+   private function esAdminDe(Request $request, $id): bool
+{
+    $u = $request->user();
+    if ($u->es_superadmin) return true;
 
-        $suscripcion = DB::table('suscripciones')
-            ->join('planes', 'planes.id', '=', 'suscripciones.id_plan')
-            ->where('suscripciones.id_aseguradora', $id)
-            ->whereIn('suscripciones.estatus', ['activo', 'activa', 'prueba', 'trial'])
-            ->select('planes.id as plan_id', 'planes.nombre as plan', 'planes.precio as plan_precio', 'suscripciones.estatus as estatus_suscripcion', 'suscripciones.fecha_fin as suscripcion_fecha_fin')
-            ->orderByDesc('suscripciones.id')
-            ->first();
+    return (int) $u->id_aseguradora === (int) $id
+        && DB::table('roles')->where('id', $u->id_rol)->value('nombre') === 'Administrador';
+}
 
-        $data = $aseguradora->toArray();
-        $data['plan'] = $suscripcion->plan ?? null;
-        $data['plan_id'] = $suscripcion->plan_id ?? null;
-        $data['plan_precio'] = $suscripcion->plan_precio ?? null;
-        $data['estatus_suscripcion'] = $suscripcion->estatus_suscripcion ?? null;
-        $data['suscripcion_fecha_fin'] = $suscripcion->suscripcion_fecha_fin ?? null;
+public function show(Request $request, $id)
+{
+    $u = $request->user();
+    abort_unless($u->es_superadmin || (int) $u->id_aseguradora === (int) $id, 403, 'No autorizado');
 
-        return response()->json($data);
+    $aseguradora = Aseguradora::findOrFail($id);
+
+    $suscripcion = DB::table('suscripciones')
+        ->join('planes', 'planes.id', '=', 'suscripciones.id_plan')
+        ->where('suscripciones.id_aseguradora', $id)
+        ->whereIn('suscripciones.estatus', ['activo', 'activa', 'prueba', 'trial'])
+        ->select('planes.id as plan_id', 'planes.nombre as plan', 'planes.precio as plan_precio', 'suscripciones.estatus as estatus_suscripcion', 'suscripciones.fecha_fin as suscripcion_fecha_fin')
+        ->orderByDesc('suscripciones.id')
+        ->first();
+
+    $data = $aseguradora->toArray();
+    $data['plan'] = $suscripcion->plan ?? null;
+    $data['plan_id'] = $suscripcion->plan_id ?? null;
+    $data['plan_precio'] = $suscripcion->plan_precio ?? null;
+    $data['estatus_suscripcion'] = $suscripcion->estatus_suscripcion ?? null;
+    $data['suscripcion_fecha_fin'] = $suscripcion->suscripcion_fecha_fin ?? null;
+
+    return response()->json($data);
+}
+
+public function update(Request $request, $id)
+{
+    abort_unless($this->esAdminDe($request, $id), 403, 'No autorizado');
+
+    $aseguradora = Aseguradora::findOrFail($id);
+
+    $reglas = [
+        'nombre'        => 'sometimes|string|max:150',
+        'razon_social'  => 'sometimes|string|max:200',
+        'correo'        => 'sometimes|email|max:100',
+        'telefono'      => 'sometimes|string|max:15',
+        'sitio_web'     => 'nullable|string|max:150',
+        'domicilio'     => 'sometimes|string|max:255',
+        'municipio'     => 'sometimes|string|max:100',
+        'estado'        => 'sometimes|string|max:50',
+        'codigo_postal' => 'sometimes|string|max:10',
+        'pais'          => 'sometimes|string|max:50',
+        'logo'          => 'nullable|image|max:2048',
+    ];
+
+    // RFC, estatus y observaciones solo los toca el superadmin
+    if ($request->user()->es_superadmin) {
+        $reglas += [
+            'rfc'           => 'sometimes|string|max:13|unique:aseguradoras,rfc,' . $id,
+            'estatus'       => 'sometimes|in:activo,inactivo,suspendido',
+            'observaciones' => 'nullable|string|max:255',
+        ];
     }
+
+    $data = $request->validate($reglas);
+    unset($data['logo']);
+
+    if ($request->hasFile('logo')) {
+        $data['logo'] = $request->file('logo')->store('logos', 'public');
+    }
+
+    $aseguradora->update($data);
+
+    return response()->json(['message' => 'Aseguradora actualizada correctamente', 'aseguradora' => $aseguradora]);
+}
 
     public function store(Request $request)
     {
@@ -108,23 +161,6 @@ class AseguradoraController extends Controller
         ], 201);
     }
 
-    public function update(Request $request, $id)
-    {
-        $aseguradora = Aseguradora::findOrFail($id);
-
-        $data = $request->except('logo');
-
-        if ($request->hasFile('logo')) {
-            $data['logo'] = $request->file('logo')->store('logos', 'public');
-        }
-
-        $aseguradora->update($data);
-
-        return response()->json([
-            'message'     => 'Aseguradora actualizada correctamente',
-            'aseguradora' => $aseguradora,
-        ]);
-    }
 
     public function destroy($id)
     {
