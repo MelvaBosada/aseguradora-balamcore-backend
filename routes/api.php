@@ -166,6 +166,8 @@ Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, '
         Route::post('/polizas/{id}/asignar-bienes', [PolizaController::class, 'asignarBienes']);
         Route::get('/polizas/buscar-cliente', [PolizaController::class, 'buscarClientePorRfc']);
         Route::apiResource('polizas', PolizaController::class);
+        Route::get('/polizas/{id}/documento', [PolizaController::class, 'documento']);
+        Route::get('/polizas/{id}/endosos/{endosoId}/documento', [PolizaController::class, 'documentoEndoso']);
 
         // ── Siniestros ──────────────────────────────────────
         Route::get('/siniestros', [SiniestroController::class, 'index']);
