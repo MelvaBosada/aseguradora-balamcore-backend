@@ -126,8 +126,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'correo'   => 'required|email',
-            'password' => 'required',
+        'correo'   => 'required|email',
+        'password' => 'required',
         ]);
 
         $usuario = DB::table('usuarios')
@@ -135,7 +135,14 @@ class AuthController extends Controller
             ->leftJoin('aseguradoras', 'usuarios.id_aseguradora', '=', 'aseguradoras.id')
             ->leftJoin('empleados', 'empleados.id_usuario', '=', 'usuarios.id')
             ->select(
-                'usuarios.*',
+                'usuarios.id',
+                'usuarios.correo',
+                'usuarios.contrasena',
+                'usuarios.id_rol',
+                'usuarios.id_aseguradora',
+                'usuarios.es_superadmin',
+                'usuarios.activo',
+                'usuarios.tour_completado',
                 'roles.nombre as rol',
                 'aseguradoras.nombre as aseguradora',
                 'aseguradoras.fecha_registro',
@@ -149,59 +156,50 @@ class AuthController extends Controller
             return response()->json(['message' => 'Credenciales incorrectas'], 401);
         }
 
-        // Permisos del rol
+        if (!$usuario->activo) {
+            return response()->json(['message' => 'Tu cuenta está desactivada. Contacta al administrador.'], 403);
+        }
+
         $permisos = DB::table('rolxpermiso')
             ->join('permisos', 'rolxpermiso.id_permiso', '=', 'permisos.id')
             ->where('rolxpermiso.id_rol', $usuario->id_rol)
             ->pluck('permisos.clave')
             ->toArray();
 
-        // Suscripción activa con TODOS los campos del plan que necesita el frontend
-        $suscripcion = DB::table('suscripciones')
-            ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
-            ->select(
-                'suscripciones.*',
-                'planes.nombre as plan',
-                'planes.precio',
-                'planes.precio_anual',
-                'planes.limite_polizas_vencer_dia',
-                'planes.limite_siniestros_mes',
-                'planes.limite_bienes_por_cliente',
-                'planes.limite_roles',
-                'planes.pdf_ilimitado',
-                'planes.soporte_prioritario',
-            )
-            ->where('suscripciones.id_aseguradora', $usuario->id_aseguradora)
-            ->whereIn('suscripciones.estatus', ['prueba', 'activo', 'activa', 'trial'])
-            ->orderBy('suscripciones.id', 'desc')
-            ->first();
+        $suscripcion = $usuario->id_aseguradora
+            ? \App\Services\SuscripcionService::resumenActual((int) $usuario->id_aseguradora)
+            : null;
 
-        // Módulos del plan activo
-        $modulos = [];
-        if ($suscripcion) {
-            $modulos = DB::table('planxmodulo')
-                ->join('modulos', 'planxmodulo.id_modulo', '=', 'modulos.id')
-                ->where('planxmodulo.id_plan', $suscripcion->id_plan)
-                ->pluck('modulos.clave')
-                ->toArray();
-        }
+        $modulos = $suscripcion ? ($suscripcion->modulos ?? []) : [];
 
-        $usuarioModel = \App\Models\Usuario::find($usuario->id);
-        $token = $usuarioModel->createToken('auth_token')->plainTextToken;
+        DB::table('usuarios')->where('id', $usuario->id)->update(['ultimo_acceso' => Carbon::now()]);
+
+        $token = \App\Models\Usuario::find($usuario->id)->createToken('auth_token')->plainTextToken;
+
+        // El hash de la contraseña NUNCA sale del servidor
+        $datosUsuario = (array) $usuario;
+        unset($datosUsuario['contrasena']);
+        $datosUsuario['tour_completado'] = (bool) $usuario->tour_completado;
 
         return response()->json([
             'message'     => 'Login exitoso',
             'token'       => $token,
-            'usuario'     => $usuario,
+            'usuario'     => $datosUsuario,
             'permisos'    => $permisos,
             'modulos'     => $modulos,
             'suscripcion' => $suscripcion,
         ]);
     }
 
+    public function completarTour(Request $request)
+    {
+        DB::table('usuarios')->where('id', $request->user()->id)->update(['tour_completado' => true]);
+        return response()->json(['message' => 'Guía completada']);
+    }
+
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()->delete();
+        $request->user()?->currentAccessToken()?->delete();
         return response()->json(['message' => 'Sesión cerrada']);
     }
 }

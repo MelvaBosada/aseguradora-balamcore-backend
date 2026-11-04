@@ -22,5 +22,6 @@ class Empleado extends Model
         'fecha_vencimiento_cedula', 'especialidad',
         'contacto_emergencia_nombre', 'contacto_emergencia_parentesco',
         'contacto_emergencia_telefono',
+        'baja_por',
     ];
 }

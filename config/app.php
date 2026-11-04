@@ -53,9 +53,18 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
-    # ── 4. AGREGAR EN config/app.php ──────────────────────
-'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Frontend URL
+    |--------------------------------------------------------------------------
+    |
+    | URL del frontend (Vercel). Stripe la usa para regresar al usuario
+    | después de pagar (success_url y cancel_url).
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
 
     /*
     |--------------------------------------------------------------------------
