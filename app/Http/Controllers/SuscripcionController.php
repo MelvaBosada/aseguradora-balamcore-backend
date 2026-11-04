@@ -2,70 +2,54 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Suscripcion;
 use App\Models\Plan;
-use App\Services\SuscripcionService;
+use App\Models\Suscripcion;
+use App\Services\CobroService;
+use App\Services\SuscripcionService as Svc;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
-use Stripe\Stripe;
-use Stripe\Refund;
 use Stripe\Checkout\Session;
+use Stripe\Stripe;
 
 class SuscripcionController extends Controller
 {
-    private const COBRO_MINIMO      = 10.00; // Stripe no cobra menos de $10 MXN
-    private const DIAS_PARA_RENOVAR = 7;     // ventana para renovar o programar un cambio
+    /* ══════════════ Gestión manual (solo superadmin) ══════════════ */
 
     private function soloSuperadmin(Request $request): void
     {
         abort_unless($request->user()?->es_superadmin, 403, 'No autorizado');
     }
 
-    // ══════════════════════════════════════════════════════
-    //  gestión manual (solo superadmin)
-    // ══════════════════════════════════════════════════════
-
     public function index(Request $request)
     {
         $this->soloSuperadmin($request);
 
-        $suscripciones = DB::table('suscripciones')
-            ->join('planes',       'suscripciones.id_plan',       '=', 'planes.id')
-            ->join('aseguradoras', 'suscripciones.id_aseguradora', '=', 'aseguradoras.id')
-            ->select(
-                'suscripciones.*',
-                'planes.nombre as plan',
-                'planes.precio',
-                'aseguradoras.nombre as aseguradora'
-            )
-            ->get();
-
-        return response()->json($suscripciones);
+        return response()->json(
+            DB::table('suscripciones')
+                ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
+                ->join('aseguradoras', 'suscripciones.id_aseguradora', '=', 'aseguradoras.id')
+                ->select('suscripciones.*', 'planes.nombre as plan', 'planes.precio', 'aseguradoras.nombre as aseguradora')
+                ->get()
+        );
     }
 
     public function getByAseguradora(Request $request, $id_aseguradora)
     {
         $u = $request->user();
-        abort_unless(
-            $u->es_superadmin || (int) $u->id_aseguradora === (int) $id_aseguradora,
-            403,
-            'No autorizado'
+        abort_unless($u->es_superadmin || (int) $u->id_aseguradora === (int) $id_aseguradora, 403, 'No autorizado');
+
+        return response()->json(
+            DB::table('suscripciones')
+                ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
+                ->select('suscripciones.*', 'planes.nombre as plan', 'planes.precio')
+                ->where('suscripciones.id_aseguradora', $id_aseguradora)
+                ->orderBy('suscripciones.id', 'desc')
+                ->first()
         );
-
-        $suscripcion = DB::table('suscripciones')
-            ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
-            ->select('suscripciones.*', 'planes.nombre as plan', 'planes.precio')
-            ->where('suscripciones.id_aseguradora', $id_aseguradora)
-            ->orderBy('suscripciones.id', 'desc')
-            ->first();
-
-        return response()->json($suscripcion);
     }
 
-    // Activación manual desde el SuperAdmin. La anterior pasa a 'renovada'
-    // porque hay continuidad de servicio (se asigna un plan nuevo).
     public function activar(Request $request, $id_aseguradora)
     {
         $this->soloSuperadmin($request);
@@ -88,13 +72,11 @@ class SuscripcionController extends Controller
         return response()->json(['message' => 'Suscripción activada', 'suscripcion' => $suscripcion]);
     }
 
-    // Cancelación manual real: queda como 'cancelada' porque no hay plan nuevo que la reemplace.
     public function cancelar(Request $request, $id)
     {
         $this->soloSuperadmin($request);
 
-        $suscripcion = Suscripcion::findOrFail($id);
-        $suscripcion->update(['estatus' => 'cancelada', 'fecha_cancelacion' => Carbon::now()]);
+        Suscripcion::findOrFail($id)->update(['estatus' => 'cancelada', 'fecha_cancelacion' => Carbon::now()]);
         return response()->json(['message' => 'Suscripción cancelada']);
     }
 
@@ -106,56 +88,226 @@ class SuscripcionController extends Controller
         return response()->json(['message' => 'Suscripción eliminada']);
     }
 
-    // ══════════════════════════════════════════════════════
-    //  Suscripción del usuario autenticado
-    // ══════════════════════════════════════════════════════
+    /* ══════════════ Suscripción del usuario ══════════════ */
+
+    private function esAdministrador($u): bool
+    {
+        if ($u->es_superadmin) {
+            return true;
+        }
+        return DB::table('roles')->where('id', $u->id_rol)->value('nombre') === 'Administrador';
+    }
+
+    private function soloAdministrador(Request $request): void
+    {
+        abort_unless(
+            $this->esAdministrador($request->user()),
+            403,
+            'Solo el administrador de la agencia puede gestionar el plan.'
+        );
+    }
+
+    private function planActivo($id)
+    {
+        $plan = DB::table('planes')->where('id', $id)->where('estatus', 'activo')->first();
+        abort_if(!$plan, 404, 'Plan no encontrado');
+        return $plan;
+    }
 
     public function actual(Request $request)
     {
-        $idAseg = $request->user()->id_aseguradora;
-        SuscripcionService::normalizar($idAseg);
-
-        $suscripcion = DB::table('suscripciones')
-            ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
-            ->where('suscripciones.id_aseguradora', $idAseg)
-            ->whereIn('suscripciones.estatus', ['activa', 'trial'])
-            ->select(
-                'suscripciones.*',
-                'planes.nombre as plan',
-                'planes.precio',
-                'planes.precio_anual',
-                'planes.limite_polizas_vencer_dia',
-                'planes.limite_siniestros_mes',
-                'planes.limite_bienes_por_cliente',
-                'planes.pdf_ilimitado',
-                'planes.soporte_prioritario',
-            )
-            ->orderByDesc('suscripciones.id')
-            ->first();
-
-        if ($suscripcion) {
-            // Cambio ya pagado que empieza cuando termine el plan actual
-            $suscripcion->programada = DB::table('suscripciones')
-                ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
-                ->where('suscripciones.id_aseguradora', $idAseg)
-                ->where('suscripciones.estatus', 'programada')
-                ->select(
-                    'suscripciones.id',
-                    'suscripciones.id_plan',
-                    'suscripciones.periodo',
-                    'suscripciones.fecha_inicio_plan',
-                    'suscripciones.fecha_fin_plan',
-                    'suscripciones.monto_cobrado',
-                    'planes.nombre as plan'
-                )
-                ->orderByDesc('suscripciones.id')
-                ->first();
-        }
-
-        return response()->json($suscripcion);
+        return response()->json(Svc::resumenActual((int) $request->user()->id_aseguradora));
     }
 
-    // Verificar límites del plan antes de crear un registro
+    /** Todo lo que necesita la pantalla "Mi plan" */
+    public function miPlan(Request $request)
+    {
+        $u      = $request->user();
+        $idAseg = (int) $u->id_aseguradora;
+        $ahora  = Carbon::now();
+
+        $s    = Svc::resumenActual($idAseg);
+        $aseg = DB::table('aseguradoras')->where('id', $idAseg)->first();
+
+        $plan = $politica = $cambio = $adelantado = $proximo = $fallo = $cancelacion = null;
+
+        if ($s) {
+            $esPago  = in_array($s->estatus, ['activa', 'activo'], true);
+            $vigente = Svc::estaVigente($s);
+            $fin     = Svc::finDe($s);
+            $ini     = Svc::inicioDe($s);
+            $dias    = $fin ? max(0, (int) ceil(($fin->timestamp - $ahora->timestamp) / 86400)) : null;
+            $total   = $fin ? max(1, (int) round(($fin->timestamp - $ini->timestamp) / 86400)) : null;
+            $pl      = DB::table('planes')->where('id', $s->id_plan)->first();
+            $periodo = $esPago ? (($s->periodo ?? null) ?: 'mensual') : null;
+
+            $estado = !$vigente
+                ? ($s->estatus === 'cancelada' ? 'cancelada' : 'vencida')
+                : ($esPago ? 'activa' : 'prueba');
+
+            $plan = [
+                'id'             => $s->id_plan,
+                'nombre'         => $pl->nombre ?? $s->plan,
+                'periodo'        => $periodo,
+                'estado'         => $estado,
+                'precio_lista'   => $pl ? (float) ($periodo === 'anual' ? $pl->precio_anual : $pl->precio) : null,
+                'inicio'         => $ini->toIso8601String(),
+                'fin'            => $fin?->toIso8601String(),
+                'dias_restantes' => $dias,
+                'dias_totales'   => $total,
+                'progreso'       => ($dias !== null && $total) ? round(min(100, max(0, $dias / $total * 100)), 1) : 0,
+                'modulos'        => DB::table('planxmodulo')
+                    ->join('modulos', 'planxmodulo.id_modulo', '=', 'modulos.id')
+                    ->where('planxmodulo.id_plan', $s->id_plan)
+                    ->pluck('modulos.nombre'),
+                'limites'        => [
+                    'polizas_vencer_dia'  => $pl->limite_polizas_vencer_dia ?? null,
+                    'siniestros_mes'      => $pl->limite_siniestros_mes ?? null,
+                    'bienes_por_cliente'  => $pl->limite_bienes_por_cliente ?? null,
+                    'pdf_ilimitado'       => (bool) ($pl->pdf_ilimitado ?? false),
+                    'soporte_prioritario' => (bool) ($pl->soporte_prioritario ?? false),
+                ],
+            ];
+
+            if (!empty($s->cancelacion_programada_at)) {
+                $cancelacion = $fin?->toIso8601String();
+            }
+
+            if ($esPago && $vigente && $fin) {
+                $est = Svc::estimarReembolso($s);
+                $hubo = DB::table('suscripciones')->where('id_aseguradora', $idAseg)->whereNotNull('reembolsado_at')->exists()
+                    || DB::table('solicitudes_reembolso')->where('id_aseguradora', $idAseg)->exists();
+
+                $politica = [
+                    'es_anual'              => $periodo === 'anual',
+                    'puede_reembolso'       => $est['elegible'],
+                    'reembolso_estimado'    => $est['monto'],
+                    'reembolso_hasta'       => Svc::reembolsoHasta($s)->toIso8601String(),
+                    'reembolso_motivo'      => $est['motivo'],
+                    'reembolso_automatico'  => !$hubo,
+                    'reembolso_dias'        => Svc::REEMBOLSO_DIAS,
+                    'puede_adelantar'       => $dias <= Svc::AVISO_DIAS,
+                    'adelantar_desde'       => $fin->copy()->subDays(Svc::AVISO_DIAS)->toIso8601String(),
+                ];
+
+                if (!empty($s->cambio_id_plan)) {
+                    $p = DB::table('planes')->where('id', $s->cambio_id_plan)->first();
+                    if ($p) {
+                        $per = $s->cambio_periodo ?? 'mensual';
+                        $cambio = [
+                            'plan'            => $p->nombre,
+                            'periodo'         => $per,
+                            'precio_estimado' => (float) ($per === 'anual' ? $p->precio_anual : $p->precio),
+                            'entra_el'        => $fin->toIso8601String(),
+                        ];
+                    }
+                }
+
+                if (!$cancelacion) {
+                    $planSig = $cambio ? DB::table('planes')->where('nombre', $cambio['plan'])->first() : $pl;
+                    $perSig  = $cambio ? $cambio['periodo'] : $periodo;
+                    $proximo = [
+                        'fecha'      => $fin->toIso8601String(),
+                        'plan'       => $planSig->nombre ?? $pl->nombre,
+                        'periodo'    => $perSig,
+                        'monto'      => (float) ($perSig === 'anual' ? ($planSig->precio_anual ?? 0) : ($planSig->precio ?? 0)),
+                        'automatico' => (bool) ($aseg->renovacion_auto && $aseg->stripe_payment_method_id),
+                    ];
+                }
+
+                if ((int) ($s->cobro_intentos ?? 0) > 0) {
+                    $fallo = [
+                        'intentos' => (int) $s->cobro_intentos,
+                        'maximo'   => Svc::MAX_INTENTOS,
+                        'error'    => $s->cobro_error,
+                        'ultimo'   => $s->ultimo_intento_at,
+                    ];
+                }
+            }
+        }
+
+        $prog = Svc::programada($idAseg);
+        if ($prog) {
+            $adelantado = [
+                'plan'          => DB::table('planes')->where('id', $prog->id_plan)->value('nombre'),
+                'periodo'       => $prog->periodo,
+                'empieza'       => Svc::inicioDe($prog)->toIso8601String(),
+                'monto_cobrado' => (float) ($prog->monto_cobrado ?? 0),
+            ];
+        }
+
+        $tarjeta = null;
+        if (!empty($aseg->stripe_payment_method_id)) {
+            $venceEl = Carbon::create((int) $aseg->tarjeta_exp_anio, (int) $aseg->tarjeta_exp_mes, 1)->endOfMonth();
+            $tarjeta = [
+                'marca'      => $aseg->tarjeta_marca,
+                'ultimos4'   => $aseg->tarjeta_ultimos4,
+                'exp_mes'    => $aseg->tarjeta_exp_mes,
+                'exp_anio'   => $aseg->tarjeta_exp_anio,
+                'vence_antes' => $proximo ? $venceEl->lt(Carbon::parse($proximo['fecha'])) : $venceEl->lt($ahora),
+            ];
+        }
+
+        $historial = DB::table('suscripciones')
+            ->join('planes', 'suscripciones.id_plan', '=', 'planes.id')
+            ->where('suscripciones.id_aseguradora', $idAseg)
+            ->whereNotNull('suscripciones.stripe_subscription_id')
+            ->select(
+                'suscripciones.id',
+                'suscripciones.estatus',
+                'suscripciones.periodo',
+                'suscripciones.fecha_inicio',
+                'suscripciones.fecha_inicio_plan',
+                'suscripciones.monto_cobrado',
+                'suscripciones.reembolsado_monto',
+                'planes.nombre as plan'
+            )
+            ->orderByDesc('suscripciones.id')
+            ->limit(10)
+            ->get()
+            ->map(fn ($h) => [
+                'id'            => $h->id,
+                'folio'         => 'BC-' . str_pad($h->id, 6, '0', STR_PAD_LEFT),
+                'fecha'         => Svc::inicioDe($h)->toIso8601String(),
+                'plan'          => $h->plan,
+                'periodo'       => $h->periodo,
+                'estatus'       => $h->estatus,
+                'monto_cobrado' => (float) ($h->monto_cobrado ?? 0),
+                'reembolsado'   => (float) ($h->reembolsado_monto ?? 0),
+            ]);
+
+        return response()->json([
+            'puede_gestionar'   => $this->esAdministrador($u),
+            'aseguradora'       => [
+                'nombre'        => $aseg->nombre,
+                'razon_social'  => $aseg->razon_social,
+                'rfc'           => $aseg->rfc,
+                'correo'        => $aseg->correo,
+                'telefono'      => $aseg->telefono,
+                'sitio_web'     => $aseg->sitio_web,
+                'domicilio'     => $aseg->domicilio,
+                'municipio'     => $aseg->municipio,
+                'estado'        => $aseg->estado,
+                'codigo_postal' => $aseg->codigo_postal,
+                'pais'          => $aseg->pais,
+                'logo_url'      => $aseg->logo ? url('storage/' . $aseg->logo) : null,
+                'desde'         => $aseg->fecha_registro,
+            ],
+            'plan'              => $plan,
+            'politica'          => $politica,
+            'cambio_programado' => $cambio,
+            'pago_adelantado'   => $adelantado,
+            'cancelacion'       => $cancelacion,
+            'facturacion'       => [
+                'renovacion_auto' => (bool) $aseg->renovacion_auto,
+                'tarjeta'         => $tarjeta,
+                'proximo_cobro'   => $proximo,
+                'cobro_fallido'   => $fallo,
+            ],
+            'historial'         => $historial,
+        ]);
+    }
+
     public function verificarLimite(Request $request, string $tipo)
     {
         $usuario = $request->user();
@@ -179,7 +331,7 @@ class SuscripcionController extends Controller
                 $count = DB::table('siniestros')
                     ->where('id_aseguradora', $usuario->id_aseguradora)
                     ->whereMonth('fecha_creacion', Carbon::now()->month)
-                    ->whereYear('fecha_creacion',  Carbon::now()->year)
+                    ->whereYear('fecha_creacion', Carbon::now()->year)
                     ->count();
                 if ($count >= $limite) {
                     return response()->json([
@@ -214,53 +366,110 @@ class SuscripcionController extends Controller
         return response()->json(['permitido' => true, 'limite' => null]);
     }
 
-    // ══════════════════════════════════════════════════════
-    //  Cotizar / pagar / verificar / cancelar cambio
-    // ══════════════════════════════════════════════════════
+    /* ══════════════ Cotizar, pagar, verificar ══════════════ */
 
-    // Resumen del cambio (crédito, total, fechas) ANTES de pagar
     public function cotizarCambio(Request $request)
     {
         $request->validate([
-            'id_plan' => 'required|integer',
-            'periodo' => 'required|in:mensual,anual',
+            'id_plan'   => 'required|integer',
+            'periodo'   => 'required|in:mensual,anual',
+            'adelantar' => 'sometimes|boolean',
         ]);
 
-        $idAseg = $request->user()->id_aseguradora;
-        SuscripcionService::normalizar($idAseg);
+        $idAseg = (int) $request->user()->id_aseguradora;
+        Svc::normalizar($idAseg);
 
         $plan = $this->planActivo($request->id_plan);
-        $q    = $this->calcularCotizacion($idAseg, $plan, $request->periodo);
-        $this->validarSinProgramada($idAseg, $q);
 
-        return response()->json($this->presentar($q));
+        return response()->json(
+            Svc::presentar(Svc::cotizar($idAseg, $plan, $request->periodo, $request->boolean('adelantar')))
+        );
     }
 
     public function crearCheckout(Request $request)
     {
+        $this->soloAdministrador($request);
+
         $request->validate([
-            'id_plan' => 'required|integer',
-            'periodo' => 'required|in:mensual,anual',
+            'id_plan'     => 'required|integer',
+            'periodo'     => 'required|in:mensual,anual',
+            'adelantar'   => 'sometimes|boolean',
+            'activar_auto' => 'sometimes|boolean',
         ]);
 
-        $usuario = $request->user();
-        $idAseg  = $usuario->id_aseguradora;
-        SuscripcionService::normalizar($idAseg);
+        $idAseg = (int) $request->user()->id_aseguradora;
+        Svc::normalizar($idAseg);
 
-        $plan = $this->planActivo($request->id_plan);
-        $q    = $this->calcularCotizacion($idAseg, $plan, $request->periodo);
-        $this->validarSinProgramada($idAseg, $q);
+        $plan  = $this->planActivo($request->id_plan);
+        $q     = Svc::cotizar($idAseg, $plan, $request->periodo, $request->boolean('adelantar'));
+        $auto  = $request->boolean('activar_auto');
 
-        // El crédito cubre (casi) todo: se aplica sin pasar por Stripe
-        if ($q['cargo'] <= 0) {
-            $this->aplicarCambio($idAseg, $plan, $q['tipo'], $q['periodo'], $q['precio_plan'], 0.0, $q['credito'], null, null);
-            return response()->json(['aplicado' => true, 'message' => 'Cambio aplicado']);
+        // Bajar de plan: se programa para cuando termine el periodo, sin cobro
+        if ($q['tipo'] === 'programar') {
+            $act = Svc::activaActual($idAseg);
+
+            DB::table('suscripciones')->where('id', $act->id)->update([
+                'cambio_id_plan'       => $plan->id,
+                'cambio_periodo'       => $q['periodo'],
+                'cambio_solicitado_at' => Carbon::now(),
+            ]);
+
+            return response()->json([
+                'programado'  => true,
+                'plan'        => $plan->nombre,
+                'periodo'     => $q['periodo'],
+                'entra_el'    => $q['inicia']->toIso8601String(),
+                'precio_plan' => $q['precio_plan'],
+            ]);
         }
 
-        $aseguradora = DB::table('aseguradoras')->where('id', $idAseg)->first();
+        $datos = [
+            'tipo'        => $q['tipo'],
+            'periodo'     => $q['periodo'],
+            'precio_plan' => $q['precio_plan'],
+            'cargo'       => $q['cargo'],
+            'credito'     => $q['credito'],
+            'dias_extra'  => $q['dias_extra'],
+        ];
+
+        // El crédito cubre todo: se aplica sin pasar por Stripe
+        if ($q['cargo'] <= 0) {
+            $id = Svc::aplicar($idAseg, $plan, $datos + ['session_id' => null, 'payment_intent' => null]);
+            abort_if(!$id, 409, 'Tu cambio ya se estaba procesando. Actualiza la página.');
+
+            if ($auto) {
+                $a = DB::table('aseguradoras')->where('id', $idAseg)->first();
+                if (!empty($a->stripe_payment_method_id)) {
+                    DB::table('aseguradoras')->where('id', $idAseg)->update(['renovacion_auto' => true]);
+                }
+            }
+
+            return response()->json([
+                'aplicado'  => true,
+                'resultado' => Svc::resultado(DB::table('suscripciones')->where('id', $id)->first(), $q['tipo'], $q['credito'], $q['dias_extra']),
+            ]);
+        }
+
+        $front       = rtrim(config('app.frontend_url'), '/');
         $descripcion = $q['credito'] > 0
-            ? "Plan {$plan->nombre} ({$q['periodo']}). Incluye un descuento de $" . number_format($q['credito'], 2) . ' por el tiempo no usado de tu plan actual.'
+            ? "Plan {$plan->nombre} ({$q['periodo']}). Incluye un descuento de $" . Svc::money($q['credito']) . ' por el tiempo no usado de tu plan actual.'
             : "Plan {$plan->nombre} ({$q['periodo']}) de BalamCore.";
+
+        $meta = [
+            'id_aseguradora' => $idAseg,
+            'id_plan'        => $plan->id,
+            'periodo'        => $q['periodo'],
+            'tipo'           => $q['tipo'],
+            'precio_plan'    => $q['precio_plan'],
+            'credito'        => $q['credito'],
+            'dias_extra'     => $q['dias_extra'],
+            'activar_auto'   => $auto ? '1' : '0',
+        ];
+
+        $intent = ['metadata' => $meta];
+        if ($auto) {
+            $intent['setup_future_usage'] = 'off_session'; // guarda la tarjeta para renovar solo
+        }
 
         try {
             Stripe::setApiKey(config('services.stripe.secret'));
@@ -269,8 +478,9 @@ class SuscripcionController extends Controller
                 'payment_method_types' => ['card'],
                 'mode'                 => 'payment',
                 'locale'               => 'es',
-                'customer_email'       => $aseguradora->correo,
+                'customer'             => CobroService::cliente($idAseg),
                 'client_reference_id'  => (string) $idAseg,
+                'expires_at'           => time() + 1860,
                 'line_items'           => [[
                     'price_data' => [
                         'currency'     => 'mxn',
@@ -282,16 +492,10 @@ class SuscripcionController extends Controller
                     ],
                     'quantity' => 1,
                 ]],
-                'metadata' => [
-                    'id_aseguradora' => $idAseg,
-                    'id_plan'        => $plan->id,
-                    'periodo'        => $q['periodo'],
-                    'tipo'           => $q['tipo'],
-                    'precio_plan'    => $q['precio_plan'],
-                    'credito'        => $q['credito'],
-                ],
-                'success_url' => rtrim(config('app.frontend_url'), '/') . '/admin/dashboard?pago=exitoso&session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'  => rtrim(config('app.frontend_url'), '/') . '/admin/dashboard?pago=cancelado',
+                'metadata'            => $meta,
+                'payment_intent_data' => $intent,
+                'success_url'         => $front . '/admin/dashboard?pago=exitoso&session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url'          => $front . '/admin/dashboard?pago=cancelado',
             ]);
         } catch (\Throwable $e) {
             Log::error('Stripe checkout: ' . $e->getMessage());
@@ -305,270 +509,61 @@ class SuscripcionController extends Controller
         return response()->json(['url' => $session->url]);
     }
 
-    // Verifica el pago al volver de Stripe (sin webhook)
+    /** Al volver de Stripe. El webhook hace lo mismo por su cuenta; esto solo lo confirma al instante */
     public function verificarPago(Request $request)
     {
         $request->validate(['session_id' => 'required|string']);
-        $usuario = $request->user();
+        $u = $request->user();
 
         try {
             Stripe::setApiKey(config('services.stripe.secret'));
             $session = Session::retrieve($request->session_id);
         } catch (\Throwable $e) {
             Log::error('Stripe verificar: ' . $e->getMessage());
-            return response()->json(['message' => 'No se pudo verificar el pago'], 502);
+            return response()->json(['message' => 'No pudimos consultar tu pago. Intenta de nuevo en unos segundos.'], 502);
         }
 
-        $meta = $session->metadata;
-
-        // La sesión tiene que ser de la aseguradora de quien la verifica
-        if ((int) ($meta->id_aseguradora ?? 0) !== (int) $usuario->id_aseguradora) {
-            return response()->json(['message' => 'Esta sesión de pago no pertenece a tu cuenta'], 403);
+        if ((int) ($session->metadata->id_aseguradora ?? 0) !== (int) $u->id_aseguradora) {
+            return response()->json(['message' => 'Esta sesión de pago no pertenece a tu cuenta.'], 403);
         }
 
         if ($session->payment_status !== 'paid') {
-            return response()->json(['message' => 'Pago no completado'], 402);
+            return response()->json(['message' => 'El pago todavía no se completó.'], 402);
         }
 
-        $idAseg = (int) $usuario->id_aseguradora;
-        SuscripcionService::normalizar($idAseg);
-
-        $plan = DB::table('planes')->where('id', $meta->id_plan)->first();
-        if (!$plan) {
-            return response()->json(['message' => 'Plan no encontrado'], 404);
+        $res = Svc::activarDesdeSesion($session);
+        if (!$res || !$res['fila']) {
+            return response()->json(['message' => 'Tu pago se recibió pero no pudimos activar el plan. Si no se activa en unos minutos, contacta a soporte.'], 500);
         }
 
-        $aplicado = $this->aplicarCambio(
-            $idAseg,
-            $plan,
-            (string) $meta->tipo,
-            (string) $meta->periodo,
-            (float) $meta->precio_plan,
-            round($session->amount_total / 100, 2),
-            (float) ($meta->credito ?? 0),
-            $session->id,
-            is_string($session->payment_intent) ? $session->payment_intent : null
-        );
-
-        return response()->json([
-            'message'   => $aplicado ? 'Suscripción activada' : 'Ya procesado',
-            'ya_activo' => !$aplicado,
-            'tipo'      => (string) $meta->tipo,
-        ]);
+        return response()->json(array_merge(
+            ['message' => $res['aplicado'] ? 'Plan activado' : 'Pago ya procesado', 'ya_activo' => !$res['aplicado']],
+            Svc::resultado($res['fila'], $res['tipo'], $res['credito'], $res['dias_extra'], Svc::reciboUrl($res['payment_intent']))
+        ));
     }
 
-    // Cancela el cambio programado y reembolsa (aún no empezó, así que se devuelve todo)
-    public function cancelarProgramada(Request $request)
+    /** Cancela el cambio programado (sin cobro) y/o el pago adelantado (reembolso del 100%) */
+    public function cancelarCambio(Request $request)
     {
-        $idAseg = $request->user()->id_aseguradora;
-        SuscripcionService::normalizar($idAseg);
+        $this->soloAdministrador($request);
 
-        $prog = SuscripcionService::programada($idAseg);
-        if (!$prog) {
-            return response()->json(['message' => 'No tienes ningún cambio programado'], 404);
+        $idAseg = (int) $request->user()->id_aseguradora;
+        Svc::normalizar($idAseg);
+
+        try {
+            $r = CobroService::cancelarCambioProgramado($idAseg);
+        } catch (\Throwable $e) {
+            Log::error('Cancelar cambio: ' . $e->getMessage());
+            return response()->json(['message' => 'No se pudo procesar el reembolso. Tu pago sigue programado; intenta de nuevo o contacta a soporte.'], 502);
         }
 
-        $reembolsado = false;
-
-        if ($prog->stripe_payment_intent) {
-            try {
-                Stripe::setApiKey(config('services.stripe.secret'));
-                Refund::create(['payment_intent' => $prog->stripe_payment_intent]);
-                $reembolsado = true;
-            } catch (\Throwable $e) {
-                if (str_contains($e->getMessage(), 'already been refunded')) {
-                    $reembolsado = true;
-                } else {
-                    Log::error('Stripe reembolso: ' . $e->getMessage());
-                    return response()->json([
-                        'message' => 'No se pudo reembolsar. Tu cambio sigue programado; contacta a soporte.',
-                    ], 502);
-                }
-            }
-        }
-
-        DB::table('suscripciones')->where('id', $prog->id)->update([
-            'estatus'           => 'cancelada',
-            'fecha_cancelacion' => Carbon::now(),
-        ]);
+        abort_if(!$r['hizo'], 404, 'No tienes ningún cambio programado.');
 
         return response()->json([
-            'message' => $reembolsado
+            'message'     => $r['reembolsado'] > 0
                 ? 'Cambio cancelado. El reembolso llega a tu tarjeta en 5 a 10 días hábiles.'
-                : 'Cambio cancelado.',
+                : 'Cambio cancelado. No se había cobrado nada.',
+            'reembolsado' => $r['reembolsado'],
         ]);
-    }
-
-    // ══════════════════════════════════════════════════════
-    //  Lógica interna
-    // ══════════════════════════════════════════════════════
-
-    private function planActivo($idPlan)
-    {
-        $plan = DB::table('planes')->where('id', $idPlan)->where('estatus', 'activo')->first();
-        abort_if(!$plan, 404, 'Plan no encontrado');
-        return $plan;
-    }
-
-    private function validarSinProgramada(int $idAseg, array $q): void
-    {
-        abort_if(
-            $q['tipo'] !== 'nueva' && SuscripcionService::programada($idAseg),
-            422,
-            'Ya tienes un cambio programado. Cancélalo si quieres elegir otro plan.'
-        );
-    }
-
-    private function calcularCotizacion(int $idAseg, $plan, string $periodo): array
-    {
-        $ahora    = Carbon::now();
-        $duracion = $periodo === 'anual' ? 365 : 30;
-        $precio   = (float) ($periodo === 'anual' ? $plan->precio_anual : $plan->precio);
-
-        abort_if($precio <= 0, 422, "El plan {$plan->nombre} no tiene precio {$periodo}.");
-
-        $base = [
-            'plan'          => ['id' => $plan->id, 'nombre' => $plan->nombre],
-            'periodo'       => $periodo,
-            'precio_plan'   => $precio,
-            'credito'       => 0.0,
-            'duracion_dias' => $duracion,
-        ];
-
-        $actual = SuscripcionService::activaActual($idAseg);
-
-        // 1) Sin plan de pago vigente: primera compra, tras la prueba o tras vencer
-        if (!SuscripcionService::estaVigente($actual)) {
-            return array_merge($base, [
-                'tipo'      => 'nueva',
-                'cargo'     => $precio,
-                'inicia'    => $ahora,
-                'vence'     => $ahora->copy()->addDays($duracion),
-                'inmediato' => true,
-                'mensaje'   => 'Tu plan empieza hoy.',
-            ]);
-        }
-
-        $fin           = SuscripcionService::finDe($actual) ?? $ahora;
-        $segRest       = max(0, $fin->timestamp - $ahora->timestamp);
-        $diasRest      = (int) ceil($segRest / 86400);
-        $periodoActual = $actual->periodo ?: 'mensual';
-        $mismoPlan     = (int) $actual->id_plan === (int) $plan->id;
-
-        $esUpgrade = (float) $plan->precio > (float) $actual->precio
-            || ($mismoPlan && $periodoActual === 'mensual' && $periodo === 'anual');
-
-        // 2) Mejorar: inmediato, con crédito por el tiempo no usado
-        if ($esUpgrade) {
-            $montoActual = (float) ($actual->monto_plan ?? 0); // sin monto registrado (plan regalado) = sin crédito
-            $inicioPlan  = Carbon::parse($actual->fecha_inicio_plan ?: $actual->fecha_inicio);
-            $segTotal    = max(1, $fin->timestamp - $inicioPlan->timestamp);
-            $credito     = round($montoActual * min(1, $segRest / $segTotal), 2);
-            $cargo       = round(max(0, $precio - $credito), 2);
-
-            if ($cargo > 0 && $cargo < self::COBRO_MINIMO) {
-                $cargo = 0.0; // el crédito cubre casi todo; no se cobra
-            }
-
-            return array_merge($base, [
-                'tipo'      => 'upgrade',
-                'credito'   => $credito,
-                'cargo'     => $cargo,
-                'inicia'    => $ahora,
-                'vence'     => $ahora->copy()->addDays($duracion),
-                'inmediato' => true,
-                'mensaje'   => $credito > 0
-                    ? 'Tu plan nuevo empieza hoy. Descontamos el tiempo que no usaste de tu plan actual.'
-                    : 'Tu plan nuevo empieza hoy.',
-            ]);
-        }
-
-        // 3) Renovar o bajar de plan: solo en los últimos días
-        if ($diasRest > self::DIAS_PARA_RENOVAR) {
-            $desde = $fin->copy()->subDays(self::DIAS_PARA_RENOVAR)->format('d/m/Y');
-            abort(422, "Podrás elegir este plan a partir del {$desde}, cuando falten "
-                . self::DIAS_PARA_RENOVAR . ' días o menos para que termine el tuyo.');
-        }
-
-        return array_merge($base, [
-            'tipo'      => ($mismoPlan && $periodoActual === $periodo) ? 'renovacion' : 'programado',
-            'cargo'     => $precio,
-            'inicia'    => $fin,
-            'vence'     => $fin->copy()->addDays($duracion),
-            'inmediato' => false,
-            'mensaje'   => 'Tu plan actual sigue activo hasta el ' . $fin->format('d/m/Y')
-                . '. El nuevo empieza ese día.',
-        ]);
-    }
-
-    private function presentar(array $q): array
-    {
-        return array_merge($q, [
-            'inicia'        => $q['inicia']->toIso8601String(),
-            'vence'         => $q['vence']->toIso8601String(),
-            'requiere_pago' => $q['cargo'] > 0,
-        ]);
-    }
-
-    /** Guarda el cambio. Devuelve false si esa sesión de Stripe ya se había procesado. */
-    private function aplicarCambio(
-        int $idAseg, $plan, string $tipo, string $periodo,
-        float $precioPlan, float $cargo, float $credito,
-        ?string $sessionId, ?string $paymentIntent
-    ): bool {
-        return DB::transaction(function () use (
-            $idAseg, $plan, $tipo, $periodo, $precioPlan, $cargo, $credito, $sessionId, $paymentIntent
-        ) {
-            if ($sessionId && DB::table('suscripciones')
-                    ->where('stripe_subscription_id', $sessionId)->lockForUpdate()->first()) {
-                return false;
-            }
-
-            $ahora    = Carbon::now();
-            $duracion = $periodo === 'anual' ? 365 : 30;
-            $programar = in_array($tipo, ['renovacion', 'programado'], true);
-            $inicio    = $ahora;
-
-            if ($programar) {
-                $actual = SuscripcionService::activaActual($idAseg);
-                $finAct = $actual ? SuscripcionService::finDe($actual) : null;
-
-                if ($finAct && $finAct->gt($ahora)) {
-                    $inicio = $finAct;      // empieza cuando termina el actual
-                } else {
-                    $programar = false;     // el actual venció mientras pagaba: entra de una vez
-                }
-            }
-
-            if (!$programar) {
-                DB::table('suscripciones')
-                    ->where('id_aseguradora', $idAseg)
-                    ->whereIn('estatus', ['activa', 'activo', 'trial', 'prueba'])
-                    ->update(['estatus' => 'renovada', 'fecha_cancelacion' => $ahora]);
-            }
-
-            $fin = $inicio->copy()->addDays($duracion);
-
-            DB::table('suscripciones')->insert([
-                'id_aseguradora'         => $idAseg,
-                'id_plan'                => $plan->id,
-                'estatus'                => $programar ? 'programada' : 'activa',
-                'es_trial'               => false,
-                'fecha_inicio'           => $inicio,
-                'periodo'                => $periodo,
-                'fecha_fin'              => $fin,
-                'fecha_fin_trial'        => $ahora,
-                'fecha_inicio_plan'      => $inicio,
-                'fecha_fin_plan'         => $fin,
-                'stripe_subscription_id' => $sessionId,
-                'stripe_payment_intent'  => $paymentIntent,
-                'monto_plan'             => $precioPlan,
-                'monto_cobrado'          => $cargo,
-                'observaciones'          => "Pago {$periodo} — {$plan->nombre} ({$tipo})"
-                    . ($credito > 0 ? ' con crédito de $' . number_format($credito, 2) : ''),
-            ]);
-
-            return true;
-        });
     }
 }

@@ -25,5 +25,15 @@ class Suscripcion extends Model
         'monto_plan',
         'monto_cobrado',
         'stripe_payment_intent',
+                'periodo',
+        'monto_plan',
+        'monto_cobrado',
+        'stripe_payment_intent',
+        'cambio_id_plan',
+        'cambio_periodo',
+        'cambio_solicitado_at',
+        'ultimo_aviso_dias',
+        'reembolsado_monto',
+        'reembolsado_at',
     ];
 }

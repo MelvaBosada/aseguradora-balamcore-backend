@@ -22,15 +22,21 @@ class EnsureSuscripcionVigente
 
         $s = DB::table('suscripciones')
             ->where('id_aseguradora', $u->id_aseguradora)
-            ->whereIn('estatus', ['activa', 'activo', 'trial', 'prueba'])
+            ->where('estatus', '!=', 'programada')
             ->orderByDesc('id')
             ->first();
 
-        // Sin ninguna fila de suscripción se deja pasar. Cuando confirmes que todas las
-        // aseguradoras nuevas nacen con su fila de prueba, cámbialo a 403.
-        if ($s && !SuscripcionService::estaVigente($s)) {
+        // Sin ningún registro se deja pasar: revisa que toda aseguradora nueva nazca con su prueba
+        if (!$s) {
+            return $next($request);
+        }
+
+        $conFecha  = in_array($s->estatus, ['activa', 'activo', 'trial', 'prueba'], true);
+        $bloqueada = $s->estatus === 'cancelada' || ($conFecha && !SuscripcionService::estaVigente($s));
+
+        if ($bloqueada) {
             return response()->json([
-                'message' => 'Tu suscripción venció. Elige un plan para continuar.',
+                'message' => 'Tu suscripción no está activa. Elige un plan para continuar.',
                 'codigo'  => 'suscripcion_vencida',
             ], 403);
         }
