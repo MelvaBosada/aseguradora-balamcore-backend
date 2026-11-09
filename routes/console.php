@@ -11,4 +11,5 @@ Artisan::command('inspire', function () {
 
 Schedule::command('suscripciones:avisar')->dailyAt('15:00'); // 09:00 en Mérida
 Schedule::command('suscripciones:cobrar')->hourly();
+Schedule::command('siniestros:recordar-documentos')->dailyAt('15:00'); // 09:00 en Mérida
 

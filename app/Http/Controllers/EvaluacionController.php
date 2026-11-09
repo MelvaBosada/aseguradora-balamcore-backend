@@ -44,6 +44,12 @@ class EvaluacionController extends Controller
                 ->leftJoin('clientes', 'polizas.id_cliente', '=', 'clientes.id')
                 ->leftJoin('empleados', 'evaluaciones.id_empleado', '=', 'empleados.id')
                 ->where('polizas.id_aseguradora', $user->id_aseguradora);
+
+            // "Mis casos": quien no autoriza solo ve evaluaciones de los siniestros que le tocan
+            $autoriza = $user->tienePermiso('evaluaciones.autorizar') || $user->tienePermiso('evaluaciones.autorizar_alto');
+            if (!$autoriza) {
+                $query->whereIn('evaluaciones.id_siniestro', \App\Models\Siniestro::visiblePara($user)->select('siniestros.id'));
+            }
             
             if (!empty($search)) {
                 $query->where(function($q) use ($search) {
@@ -67,6 +73,7 @@ class EvaluacionController extends Controller
                 
                 $data[] = [
                     'id' => $eval->id,
+                    'id_siniestro' => $eval->id_siniestro,
                     'nSiniestro' => $eval->numero_siniestro,
                     'dictamen' => $eval->dictamen,
                     'montoRecomendado' => '$' . number_format($eval->monto_recomendado, 2),
@@ -137,6 +144,12 @@ class EvaluacionController extends Controller
         if ($evaluacion->siniestro->reporte->poliza->id_aseguradora !== $user->id_aseguradora) {
             return response()->json(['message' => 'No autorizado'], 403);
         }
+
+        // "Mis casos": quien no autoriza solo ve evaluaciones de los siniestros que le tocan
+        $autoriza = $user->tienePermiso('evaluaciones.autorizar') || $user->tienePermiso('evaluaciones.autorizar_alto');
+        if (!$autoriza && !\App\Models\Siniestro::visiblePara($user)->where('siniestros.id', $evaluacion->id_siniestro)->exists()) {
+            return response()->json(['message' => 'Evaluación no encontrada'], 404);
+        }
         
         // Obtener indemnización si existe
         $indemnizacion = Indemnizaciones::where('id_evaluaciones', $id)->first();
@@ -196,7 +209,13 @@ class EvaluacionController extends Controller
             'cuentaBancaria' => $indemnizacion ? $indemnizacion->cuenta_bancaria : 'No especificado',
             'fechaAutorizacion' => $indemnizacion ? $indemnizacion->fecha_autorizacion : '',
             'fechaPagoPDF' => $indemnizacion ? $indemnizacion->fecha_pago : '',
-            'referencia' => $indemnizacion ? $indemnizacion->id : 'No disponible'
+            'referencia' => $indemnizacion ? $indemnizacion->id : 'No disponible',
+            // Flujo de evaluación (fase 5)
+            'estatus_valor'      => $evaluacion->estatus,
+            'monto_evaluado'     => $evaluacion->monto_evaluado,
+            'nivel_autorizacion' => $evaluacion->nivel_autorizacion,
+            'calculo'            => $evaluacion->calculo,
+            'motivo_resolucion'  => $evaluacion->motivo_resolucion,
         ];
         
         return response()->json($data);

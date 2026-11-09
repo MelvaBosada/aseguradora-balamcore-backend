@@ -8,7 +8,7 @@ class Cobertura extends Model
 {
     protected $table = 'coberturas';
 
-    public $timestamps = false; 
+    public $timestamps = false;
 
     protected $fillable = [
         'id_aseguradora',
@@ -22,6 +22,19 @@ class Cobertura extends Model
         'porcentaje_cobertura',
         'monto_minimo',
         'monto_maximo',
-        'aplica_sobre'        
+        'aplica_sobre',
+        'tipos_siniestro',
     ];
+
+    protected $casts = [
+        'tipos_siniestro' => 'array',
+    ];
+
+    /** Una cobertura sin tipos definidos aplica a todos los tipos de siniestro. */
+    public function aplicaA(string $tipoSiniestro): bool
+    {
+        $tipos = $this->tipos_siniestro;
+
+        return empty($tipos) || in_array($tipoSiniestro, $tipos, true);
+    }
 }

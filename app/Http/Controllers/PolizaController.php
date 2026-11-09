@@ -213,21 +213,21 @@ class PolizaController extends Controller
                 return response()->json(['errors' => $validator->errors()], 422);
             }
 
-            $empleado = Empleado::where('id_aseguradora', $user->id_aseguradora)->first();
+            $idEmpleado = $user->empleado?->id
+                ?? Empleado::where('id_aseguradora', $user->id_aseguradora)->orderBy('id')->value('id');
 
-            if (!$empleado) {
-                Log::error('No hay empleados registrados para la aseguradora ID: ' . $user->id_aseguradora);
+            if (!$idEmpleado) {
                 return response()->json(['message' => 'No hay empleados registrados. Por favor, registra un empleado primero.'], 422);
             }
 
-            $poliza = DB::transaction(function () use ($request, $user, $empleado) {
+            $poliza = DB::transaction(function () use ($request, $user, $idEmpleado) {
                 // Se asigna dentro de la transacción: si algo falla, el consecutivo no se gasta
                 $numero = $this->generarNumeroPoliza($request->tipo, (int) $user->id_aseguradora);
 
                 $poliza = Poliza::create(array_merge([
                     'id_aseguradora' => $user->id_aseguradora,
                     'id_cliente' => $request->id_cliente,
-                    'id_empleado' => $empleado->id,
+                    'id_empleado' => $idEmpleado,
                     'numero_poliza' => $numero,
                     'tipo' => $request->tipo,
                     'estatus' => 'activa',
@@ -362,7 +362,11 @@ class PolizaController extends Controller
                     $nuevos['prima_neta'], $nuevos['derecho_poliza'], $nuevos['iva']
                 );
 
+                $antes = $poliza->only(self::CAMPOS_EDITABLES);
+
                 $poliza->update($nuevos);
+
+                $cambios = $this->diferencias($antes, $poliza->only(self::CAMPOS_EDITABLES));
 
                 // El front manda bienes_sync=1 siempre, así también se pueden quitar todos los bienes.
                 if ($request->boolean('bienes_sync')) {
@@ -378,7 +382,7 @@ class PolizaController extends Controller
                 }
 
                 if ($request->boolean('tiene_endoso')) {
-                    $this->crearEndoso($poliza, $request);
+                    $this->crearEndoso($poliza, $request, $cambios);
                 }
             });
 
@@ -486,6 +490,7 @@ class PolizaController extends Controller
             'tiene_endoso' => ['nullable', 'boolean'],
             'descripcion_endoso' => ['required_if:tiene_endoso,1', 'nullable', 'string', 'max:255'],
             'endoso_documento' => ['required_if:tiene_endoso,1', 'nullable', 'file', 'mimes:pdf', 'max:' . self::MAX_PDF_KB],
+            'fecha_efecto' => ['nullable', 'date'],
         ];
 
         $mensajes = [
@@ -626,7 +631,7 @@ class PolizaController extends Controller
      * Registra el endoso. El N° lo asigna el sistema a partir de la póliza:
      * la póliza ya viene bloqueada (lockForUpdate / transacción), así que el consecutivo no se repite.
      */
-    private function crearEndoso(Poliza $poliza, Request $request): PolizaEndoso
+    private function crearEndoso(Poliza $poliza, Request $request, array $cambios = []): PolizaEndoso
     {
         $consecutivo = ((int) PolizaEndoso::where('id_poliza', $poliza->id)->max('consecutivo')) + 1;
 
@@ -645,7 +650,26 @@ class PolizaController extends Controller
             'documento_ruta' => $doc['ruta'],
             'documento_nombre' => $doc['nombre'],
             'documento_tamanio' => $doc['tamanio'],
+            'cambios' => $cambios ?: null,
+            'fecha_efecto' => $request->input('fecha_efecto', now()->toDateString()),
         ]);
+    }
+
+    /** ['campo' => ['antes' => x, 'despues' => y]] solo de lo que cambió. */
+    private function diferencias(array $antes, array $despues): array
+    {
+        $out = [];
+        foreach ($despues as $campo => $nuevo) {
+            $viejo = $antes[$campo] ?? null;
+            $iguales = (is_numeric($viejo) && is_numeric($nuevo))
+                ? abs((float) $viejo - (float) $nuevo) < 0.005
+                : (string) $viejo === (string) $nuevo;
+
+            if (!$iguales) {
+                $out[$campo] = ['antes' => $viejo, 'despues' => $nuevo];
+            }
+        }
+        return $out;
     }
 
     /**

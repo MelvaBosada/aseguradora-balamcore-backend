@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Evidencias;
-use App\Models\Siniestros; // <-- ajusta al nombre real de tu modelo de siniestros
+use App\Models\Aseguradora;
+use App\Models\Siniestro;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,13 +17,16 @@ use PhpOffice\PhpWord\SimpleType\Jc;
 use PhpOffice\PhpWord\SimpleType\TblWidth;
 
 /**
- * Reporte fotográfico por siniestro.
+ * Reporte fotográfico por siniestro (pestaña "Fotos por siniestro" del modal Descargar).
  *
  *  GET  /evidencias/reporte/buscar?numero=1519530
  *  POST /evidencias/reporte/generar  { id_siniestro, formato: pdf|docx, fotos_por_hoja: 2|4|6, ids: [] }
  *
  * composer require barryvdh/laravel-dompdf phpoffice/phpword
  * (requiere extensiones PHP: gd, zip, xml; exif es opcional pero recomendada)
+ *
+ * Cambios de la fase 1-2: solo se ven los siniestros que el usuario puede ver ("mis casos"),
+ * y los archivos se leen del disco privado de evidencias (config/evidencias.php).
  */
 class ReporteEvidenciasController extends Controller
 {
@@ -47,11 +51,13 @@ class ReporteEvidenciasController extends Controller
             return response()->json(['message' => 'Escribe al menos 2 caracteres del número de siniestro.'], 422);
         }
 
-        $siniestro = Siniestros::where('numero_siniestro', $numero)->first();
+        $siniestro = $this->siniestros($request)->where('siniestros.numero_siniestro', $numero)->first();
 
         if (!$siniestro) {
             $like = addcslashes($numero, '%_\\');
-            $coincidencias = Siniestros::where('numero_siniestro', 'ILIKE', "%{$like}%")->limit(10)->get();
+            $coincidencias = $this->siniestros($request)
+                ->where('siniestros.numero_siniestro', 'ILIKE', "%{$like}%")
+                ->limit(10)->get();
 
             if ($coincidencias->isEmpty()) {
                 return response()->json(['message' => "No se encontró ningún siniestro con \"{$numero}\"."], 404);
@@ -62,7 +68,7 @@ class ReporteEvidenciasController extends Controller
                     'coincidencias' => $coincidencias->map(fn ($s) => [
                         'id' => $s->id,
                         'numero_siniestro' => $s->numero_siniestro,
-                        'cliente' => $s->cliente ?? null,
+                        'cliente' => $this->nombreCliente($s),
                     ])->values(),
                 ]);
             }
@@ -81,7 +87,7 @@ class ReporteEvidenciasController extends Controller
             'siniestro' => [
                 'id' => $siniestro->id,
                 'numero_siniestro' => $siniestro->numero_siniestro,
-                'cliente' => $siniestro->cliente ?? null,
+                'cliente' => $this->nombreCliente($siniestro),
             ],
             'evidencias' => $fotos,
             'otros_archivos' => max(0, $otros), // pdf, videos, rechazadas, etc. (no entran al reporte)
@@ -92,7 +98,7 @@ class ReporteEvidenciasController extends Controller
     public function generar(Request $request)
     {
         $data = $request->validate([
-            'id_siniestro' => ['required', 'integer', 'exists:siniestros,id'],
+            'id_siniestro' => ['required', 'integer'],
             'formato' => ['required', 'in:pdf,docx'],
             'fotos_por_hoja' => ['required', 'in:2,4,6'],
             'ids' => ['required', 'array', 'min:1', 'max:300'],
@@ -102,7 +108,8 @@ class ReporteEvidenciasController extends Controller
         @set_time_limit(300);
         @ini_set('memory_limit', '768M');
 
-        $siniestro = Siniestros::findOrFail($data['id_siniestro']);
+        // 404 si el siniestro es de otra aseguradora o de otro ajustador sin permiso para verlo
+        $siniestro = $this->siniestros($request)->where('siniestros.id', $data['id_siniestro'])->firstOrFail();
         $porHoja = (int) $data['fotos_por_hoja'];
         $lay = self::LAYOUTS[$porHoja];
 
@@ -110,7 +117,7 @@ class ReporteEvidenciasController extends Controller
 
         $fotos = [];
         foreach ($evidencias as $e) {
-            $img = $this->desdeStorage($e->ruta_archivo, $lay['w'], $lay['h']);
+            $img = $this->desdeStorage($e->ruta_archivo, $lay['w'], $lay['h'], $this->disco());
             if (!$img) {
                 continue; // archivo faltante o dañado
             }
@@ -123,14 +130,16 @@ class ReporteEvidenciasController extends Controller
             return response()->json(['message' => 'No se pudo leer ninguna de las fotos seleccionadas.'], 422);
         }
 
-        $aseg = $siniestro->aseguradora ?? null; // relación u columna de texto
-        $nombreAseg = is_object($aseg) ? ($aseg->nombre ?? null) : (is_string($aseg) ? $aseg : null);
-        $logoRuta = is_object($aseg) ? ($aseg->logo ?? null) : null;
+        // Aseguradora (agencia) dueña del siniestro: su logo y nombre van en el encabezado
+        $aseg = Aseguradora::find($siniestro->id_aseguradora);
+        $nombreAseg = $aseg->nombre ?? null;
+        $logoRuta = $aseg->logo ?? null; // <-- ajusta si la columna del logo se llama distinto
 
         $ctx = [
             'numero' => $siniestro->numero_siniestro,
             'aseguradora' => $nombreAseg,
-            'logo' => $logoRuta ? $this->desdeStorage($logoRuta, 150, 48) : null,
+            // el logo de la aseguradora no es una evidencia: sigue en el disco público
+            'logo' => $logoRuta ? $this->desdeStorage($logoRuta, 150, 48, 'public') : null,
             'marca' => $this->desdeArchivo(public_path('img/balamcore.png'), 330, 330),
             'datos' => $this->datosCabecera($siniestro, $nombreAseg, count($fotos)),
             'paginas' => array_chunk($fotos, $porHoja),
@@ -166,7 +175,7 @@ class ReporteEvidenciasController extends Controller
             }
         }
 
-        return Pdf::loadView('reportes.evidencias', $ctx)
+        return Pdf::loadView('exports.evidencias', $ctx)
             ->setPaper('letter', 'portrait')
             ->download($nombre);
     }
@@ -310,6 +319,28 @@ class ReporteEvidenciasController extends Controller
     // Utilidades
     // ------------------------------------------------------------------
 
+    /** Disco privado de las evidencias (config/evidencias.php). */
+    private function disco(): string
+    {
+        return config('evidencias.disk', 'local');
+    }
+
+    /**
+     * Siniestros que este usuario puede ver: de su aseguradora y, sin el permiso
+     * "siniestros.ver_todos", solo los que lleva él.
+     */
+    private function siniestros(Request $request)
+    {
+        return Siniestro::visiblePara($request->user())->with('reporte.poliza.cliente');
+    }
+
+    private function nombreCliente($siniestro): ?string
+    {
+        $c = data_get($siniestro, 'reporte.poliza.cliente');
+        $nombre = trim(($c->nombre ?? '') . ' ' . ($c->apellidos ?? ''));
+        return $nombre !== '' ? $nombre : null;
+    }
+
     /** Fotos del siniestro: solo imágenes soportadas y sin rechazadas. */
     private function fotosDe(int $idSiniestro)
     {
@@ -323,7 +354,7 @@ class ReporteEvidenciasController extends Controller
     /** Datos del recuadro de encabezado (se omiten los vacíos). */
     private function datosCabecera($s, ?string $nombreAseg, int $total): array
     {
-        $fecha = data_get($s, 'fecha_siniestro');
+        $fecha = data_get($s, 'fecha_creacion');
         try {
             $fecha = $fecha ? \Carbon\Carbon::parse($fecha)->format('d/m/Y') : null;
         } catch (\Throwable) {
@@ -332,9 +363,10 @@ class ReporteEvidenciasController extends Controller
 
         $datos = [
             'Siniestro' => $s->numero_siniestro,
-            'Asegurado' => $s->cliente ?? data_get($s, 'asegurado'),
-            'Ref. ' . ($nombreAseg ?: 'aseguradora') => data_get($s, 'referencia') ?? data_get($s, 'ref_aseguradora'),
-            'Fecha del siniestro' => $fecha,
+            'Asegurado' => $this->nombreCliente($s),
+            'Póliza' => data_get($s, 'reporte.poliza.numero_poliza'),
+            'Ref. ' . ($nombreAseg ?: 'aseguradora') => data_get($s, 'referencia'),
+            'Fecha de apertura' => $fecha,
             'Fotografías' => $total,
             'Fecha del reporte' => now()->format('d/m/Y'),
         ];
@@ -349,10 +381,27 @@ class ReporteEvidenciasController extends Controller
         return $desc !== '' ? $texto . ' — ' . Str::limit($desc, $limite) : $texto;
     }
 
-    private function desdeStorage(string $ruta, float $w, float $h): ?array
+    /**
+     * Lee el archivo del disco indicado (local, S3, etc.) a un temporal y lo procesa.
+     * Antes usaba $disk->path(), que solo existe en discos locales.
+     */
+    private function desdeStorage(string $ruta, float $w, float $h, string $disco): ?array
     {
-        $disk = Storage::disk('public');
-        return $disk->exists($ruta) ? $this->procesar($disk->path($ruta), $w, $h) : null;
+        $disk = Storage::disk($disco);
+
+        if (!$disk->exists($ruta)) {
+            return null;
+        }
+
+        $ext = strtolower(pathinfo($ruta, PATHINFO_EXTENSION)) ?: 'jpg';
+        $tmp = sys_get_temp_dir() . '/' . Str::uuid() . '.' . $ext;
+
+        try {
+            file_put_contents($tmp, $disk->get($ruta));
+            return $this->procesar($tmp, $w, $h);
+        } finally {
+            @unlink($tmp);
+        }
     }
 
     private function desdeArchivo(string $abs, float $w, float $h): ?array

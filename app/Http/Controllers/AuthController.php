@@ -148,6 +148,8 @@ class AuthController extends Controller
                 'aseguradoras.fecha_registro',
                 'empleados.nombre as nombre',
                 'empleados.apellidos as apellidos',
+                'empleados.id as id_empleado',
+                'empleados.tipo_empleado',
             )
             ->where('usuarios.correo', $request->correo)
             ->first();

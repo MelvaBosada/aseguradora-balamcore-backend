@@ -4,24 +4,24 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Concerns\Papelera;
 
 class Reportes extends Model
 {
-    use HasFactory;
+    use HasFactory, Papelera;
 
     protected $table = 'reportes';
-    
-    // Indicamos la llave primaria explícitamente
     protected $primaryKey = 'id';
+    public $timestamps = false;
 
-    // DESACTIVAR TIMESTAMPS
-    public $timestamps = false; 
+    /** nuevo -> validado -> convertido (siniestro) | descartado */
+    public const ESTADOS = ['nuevo', 'validado', 'convertido', 'descartado'];
 
+    // id_siniestro ya no existe: el vínculo vive en siniestros.id_reporte
     protected $fillable = [
         'id_aseguradora',
         'id_poliza',
         'id_empleado',
-        'id_siniestro',
         'reportado_por',
         'nombre_reportante',
         'telefono_reportante',
@@ -32,31 +32,25 @@ class Reportes extends Model
         'descripcion',
         'estado',
         'fecha_actualizacion',
-        'observaciones'
+        'observaciones',
     ];
 
-    // Para que Laravel maneje las fechas correctamente al leer de SQLite
     protected $casts = [
-        'fecha_reporte' => 'datetime',
-        'fecha_ocurrencia' => 'datetime',
+        'fecha_reporte'       => 'datetime',
+        'fecha_ocurrencia'    => 'datetime',
         'fecha_actualizacion' => 'datetime',
     ];
 
-    // ─── RELACIONES ─────────────────────────────────────────
-    
-    // Relación con póliza (la columna se llama id_poliza)
     public function poliza()
     {
         return $this->belongsTo(Poliza::class, 'id_poliza');
     }
 
-    // Relación con siniestro
     public function siniestro()
     {
-        return $this->belongsTo(Siniestro::class, 'id_siniestro');
+        return $this->hasOne(Siniestro::class, 'id_reporte');
     }
 
-    // Relación con empleado
     public function empleado()
     {
         return $this->belongsTo(Empleado::class, 'id_empleado');

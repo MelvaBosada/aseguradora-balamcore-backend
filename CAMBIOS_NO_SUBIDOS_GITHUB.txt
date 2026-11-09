@@ -1,0 +1,183 @@
+REPORTE DE CAMBIOS NO SUBIDOS A GITHUB
+Fecha de revision: 2026-11-09
+
+Proyecto: aseguradora-balamcore-backend
+Rama local: melva
+Remoto: origin -> git@github.com:MelvaBosada/aseguradora-balamcore-backend.git
+
+IMPORTANTE
+----------
+La rama local melva tiene 2 commits que no existen en origin/melva. Ademas,
+hay cambios en el arbol de trabajo que aun no tienen commit ni push.
+
+1. COMMITS LOCALES PENDIENTES DE PUSH
+-------------------------------------
+
+5b6c3cc - cambios en polizas y endosos
+Fecha: 2026-11-04 17:50:35 UTC
+
+Cambios principales:
+- Se amplio el controlador de polizas.
+- Se agregaron y ajustaron los modelos Poliza y PolizaEndoso.
+- Se agregaron migraciones para polizas, endosos, documentos y secuencias.
+- Se agregaron rutas relacionadas con polizas.
+
+d3c99b9 - Merge pull request #41 from MelvaBosada/melva
+Fecha: 2026-11-03 19:42:20 -0600
+
+Estos dos commits estan en la rama local, pero no han sido publicados en
+origin/melva.
+
+2. CAMBIOS MODIFICADOS SIN COMMIT
+---------------------------------
+
+Hay 40 archivos versionados modificados localmente. Los cambios abarcan:
+
+- Siniestros:
+  - Nuevos estados, transiciones y validaciones.
+  - Asignacion de ajustadores y registro de arribo.
+  - Validacion de identificadores numericos en rutas.
+  - Historial, notificaciones y datos operativos del siniestro.
+  - Busqueda de siniestros, reportes y polizas por diferentes criterios.
+
+- Evidencias y documentos:
+  - Historial y auditoria de evidencias.
+  - Descarga y almacenamiento de archivos.
+  - Validacion de tipos y formatos de archivos.
+  - Exportacion y reporte de evidencias.
+  - Soporte para documentos asociados a siniestros.
+
+- Evaluaciones e indemnizaciones:
+  - Flujo de calculo, envio y resolucion de evaluaciones.
+  - Generacion, confirmacion, pago y cancelacion de indemnizaciones.
+  - Servicios para calculo y validacion de indemnizaciones.
+
+- Papelera y permisos:
+  - Ajustes a permisos, rutas y control de acceso.
+  - Soporte para papelera y restauracion de registros.
+  - Reglas para impedir modificaciones en estados cerrados o pagados.
+
+- Configuracion y soporte:
+  - Configuracion de aseguradoras y coberturas.
+  - Catalogo de documentos.
+  - Traducciones en espanol.
+  - Ajustes de composer.lock y composer.json.
+  - Docker con soporte GD para JPEG, WebP y FreeType, ademas de EXIF.
+  - Tarea programada para recordar documentos pendientes.
+
+Controladores modificados:
+- AuthController.php
+- ClienteController.php
+- DashboardController.php
+- EvaluacionController.php
+- EvidenciasController.php
+- ExportController.php
+- IndemnizacionesController.php
+- PolizaController.php
+- ReporteEvidenciasController.php
+- ReportesController.php
+- SiniestroController.php
+
+Modelos y observadores modificados:
+- AseguradoraObserver.php
+- Cobertura.php
+- Empleado.php
+- Evaluacion.php
+- Evidencias.php
+- Indemnizaciones.php
+- Poliza.php
+- PolizaEndoso.php
+- Reportes.php
+- Siniestro.php
+- Usuario.php
+- Observers/AseguradoraObserver.php
+
+Tambien se modificaron Dockerfile, composer.json, composer.lock, rutas y
+varios archivos .gitignore de almacenamiento y cache.
+
+3. ARCHIVOS NUEVOS SIN COMMIT
+-----------------------------
+
+Comandos:
+- app/Console/Commands/MoverEvidenciasAPrivado.php
+- app/Console/Commands/RecordarDocumentosPendientes.php
+
+Eventos y listeners:
+- app/Events/EvaluacionAprobada.php
+- app/Listeners/GenerarIndemnizacion.php
+
+Controladores:
+- CatalogoDocumentosController.php
+- ConfiguracionSiniestrosController.php
+- EvaluacionFlujoController.php
+- MarcaAseguradoraController.php
+- PapeleraController.php
+- PolizaCoberturaController.php
+- SiniestroDocumentosController.php
+
+Modelos y componentes:
+- AseguradoraConfiguracion.php
+- CatalogoDocumento.php
+- Concerns/Papelera.php
+- EvidenciaAuditoria.php
+- EvidenciaVersion.php
+- SiniestroDocumento.php
+- SiniestroHistorial.php
+- SiniestroNotificacion.php
+
+Servicios:
+- CalculoIndemnizacionService.php
+- DocumentosSiniestroService.php
+- EvaluacionService.php
+- IndemnizacionService.php
+- NotificacionSiniestroService.php
+- PolizaCondicionesService.php
+- SiniestroEstadoService.php
+- SiniestroNumeroService.php
+- ValidacionPolizaService.php
+
+Soporte y configuracion:
+- app/Support/CatalogoDocumentosBase.php
+- app/Support/ReglasPapelera.php
+- config/evidencias.php
+- resources/views/emails/siniestro.blade.php
+- public/img/balamcore.png
+- archivos de traduccion en lang/es/
+
+Migraciones nuevas:
+- 2026_11_05_050115_fase1_2_base_siniestros.php
+- 2026_11_05_050115_fase1_2_permisos_siniestros.php
+- 2026_11_05_061922_agregar_papelera_y_unicos_por_aseguradora.php
+- 2026_11_06_034045_fase3_5_documentos_y_evaluaciones.php
+- 2026_11_06_034045_fase3_5_permisos.php
+- 2026_11_07_192438_fase6_indemnizaciones.php
+- 2026_11_07_192438_fase6_permisos.php
+- 2026_11_08_221121_auditoria_evidencias.php
+- 2026_11_09_011011_add_campos_operativos_a_siniestros.php
+- 2026_11_09_011108_add_perdida_y_taller_a_siniestros_x_bien.php
+- 2026_11_09_040855_asignar_permiso_reasignar_siniestros.php
+
+4. RUTAS Y FUNCIONALIDADES AGREGADAS
+-------------------------------------
+
+- Catalogo y configuracion de documentos de siniestros.
+- Historial de evidencias.
+- Coberturas de polizas.
+- Ajustadores y registro de arribo.
+- Cambio de estatus de siniestros.
+- Flujo de evaluaciones: calcular, enviar, resolver y consultar pendientes.
+- Flujo de indemnizaciones: generar, confirmar pago, pagar y cancelar.
+- Consulta de indemnizaciones y evaluaciones por siniestro.
+- Papelera: resumen, consulta, restauracion y eliminacion.
+- Consulta de marca de la aseguradora.
+- Validaciones numericas para parametros de rutas.
+
+5. ESTADO FINAL
+---------------
+
+- No se hizo commit ni push de los cambios descritos en las secciones 2 y 3.
+- Los commits de la seccion 1 estan guardados localmente, pero siguen
+  pendientes de push a origin/melva.
+- Este archivo tambien es nuevo y queda pendiente de agregar al commit.
+- Antes de subir, conviene ejecutar las migraciones y las pruebas del proyecto,
+  revisar composer.lock y confirmar que las rutas nuevas funcionen.

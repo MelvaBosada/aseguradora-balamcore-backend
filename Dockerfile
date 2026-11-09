@@ -3,17 +3,22 @@
 FROM php:8.2-fpm-alpine
 
 # Instalar dependencias del sistema y extensiones de PHP necesarias para Laravel y PostgreSQL
+# (gd con soporte JPEG/WebP/FreeType para los reportes fotográficos; exif para girar fotos de celular)
 RUN apk add --no-cache \
     nginx \
     supervisor \
     curl \
     libpng-dev \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    freetype-dev \
     libxml2-dev \
     zip \
     unzip \
     git \
     postgresql-dev \
-    && docker-php-ext-install pdo pdo_pgsql bcmath gd
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) pdo pdo_pgsql bcmath gd exif
 
 # Instalar Composer globalmente
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
