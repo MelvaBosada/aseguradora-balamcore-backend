@@ -34,6 +34,18 @@ use App\Http\Controllers\FacturacionController;
 use App\Http\Middleware\SoloSuperadmin;
 use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\ReporteEvidenciasController;
+use App\Http\Controllers\PapeleraController;
+use App\Http\Controllers\SiniestroDocumentosController;
+use App\Http\Controllers\CatalogoDocumentosController;
+use App\Http\Controllers\ConfiguracionSiniestrosController;
+use App\Http\Controllers\PolizaCoberturaController;
+use App\Http\Controllers\EvaluacionFlujoController;
+use App\Http\Controllers\MarcaAseguradoraController;
+use App\Http\Controllers\PolizaPdfController;
+
+
+
+
 
 // ── Auth públicas ──────────────────────────────
 Route::post('/enviar-otp',    [AuthController::class, 'enviarOtp']);
@@ -120,11 +132,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/aseguradoras',        [AseguradoraController::class, 'store'])->middleware(SoloSuperadmin::class);
     Route::put('/aseguradoras/{id}',    [AseguradoraController::class, 'update']); // el controlador valida admin de esa aseguradora
     Route::delete('/aseguradoras/{id}', [AseguradoraController::class, 'destroy'])->middleware(SoloSuperadmin::class);
-// ── Perfil ─────────────────────────────────────
-        Route::get('/perfil',           [PerfilController::class, 'show']);
-        Route::put('/perfil',           [PerfilController::class, 'update']);
-        Route::post('/perfil/password', [PerfilController::class, 'password'])->middleware('throttle:5,1');
-        Route::get('/perfil/sensibles', [PerfilController::class, 'sensibles'])->middleware('throttle:10,1');
+    Route::get('/aseguradora/marca', [MarcaAseguradoraController::class, 'show']);
+
+    // ── Perfil ─────────────────────────────────────
+    Route::get('/perfil',           [PerfilController::class, 'show']);
+    Route::put('/perfil',           [PerfilController::class, 'update']);
+    Route::post('/perfil/password', [PerfilController::class, 'password'])->middleware('throttle:5,1');
+    Route::get('/perfil/sensibles', [PerfilController::class, 'sensibles'])->middleware('throttle:10,1');
 
     // ── SuperAdministrador ─────────────────────────────────────
     Route::prefix('superadmin')->group(function () {
@@ -135,23 +149,25 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/reembolsos/{id}/resolver',   [FacturacionController::class, 'reembolsosResolver']);
     });
 
-    // ── Evidencias ─────────────────────────────────────
-    Route::get('/evidencias', [EvidenciasController::class, 'index']);
-    Route::get('/evidencias/{id}', [EvidenciasController::class, 'show']);
-    Route::post('/evidencias', [EvidenciasController::class, 'store']);
-    Route::put('/evidencias/{id}', [EvidenciasController::class, 'update']);
-    Route::delete('/evidencias/{id}', [EvidenciasController::class, 'destroy']);
-    Route::post('/evidencias/{id}/validar', [EvidenciasController::class, 'validar']);
-    Route::get('/evidencias/{id}/descargar', [EvidenciasController::class, 'descargar']);
-    Route::get('/siniestros/{id_siniestro}/evidencias', [EvidenciasController::class, 'getBySiniestro']);
-    Route::get('evidencias/reporte/buscar', [ReporteEvidenciasController::class, 'buscar']);
-Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, 'generar']);
-
 
     // ==================================================
     // DATOS DE OPERACIÓN (REQUIEREN SUSCRIPCIÓN VIGENTE)
     // ==================================================
     Route::middleware('suscripcion.vigente')->group(function () {
+
+        // ── Evidencias ─────────────────────────────────────
+        Route::get('/evidencias', [EvidenciasController::class, 'index']);
+        Route::get('/evidencias/{id}', [EvidenciasController::class, 'show']);
+        Route::post('/evidencias', [EvidenciasController::class, 'store']);
+        Route::put('/evidencias/{id}', [EvidenciasController::class, 'update']);
+        Route::delete('/evidencias/{id}', [EvidenciasController::class, 'destroy']);
+        Route::post('/evidencias/{id}/validar', [EvidenciasController::class, 'validar']);
+        Route::get('/evidencias/{id}/descargar', [EvidenciasController::class, 'descargar']);
+        Route::get('/siniestros/{id_siniestro}/evidencias', [EvidenciasController::class, 'getBySiniestro']);
+        Route::get('evidencias/reporte/buscar', [ReporteEvidenciasController::class, 'buscar']);
+        Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, 'generar']);
+        Route::get('evidencias/{id}/historial', [EvidenciasController::class, 'historial']);
+
 
         // ── Clientes ─────────────────────────────────────
         Route::get('/clientes', [ClienteController::class, 'index']);
@@ -165,18 +181,59 @@ Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, '
         Route::get('/polizas/buscar-ultima-por-rfc', [PolizaController::class, 'getUltimaPolizaPorRfc']);
         Route::post('/polizas/{id}/asignar-bienes', [PolizaController::class, 'asignarBienes']);
         Route::get('/polizas/buscar-cliente', [PolizaController::class, 'buscarClientePorRfc']);
+        Route::get('/polizas/parametros', [PolizaController::class, 'parametros']);
         Route::apiResource('polizas', PolizaController::class);
+        Route::get('/polizas/{id}/documento', [PolizaController::class, 'documento']);
+        Route::get('/polizas/{id}/endosos/{endosoId}/documento', [PolizaController::class, 'documentoEndoso']);
+        Route::get('/polizas/{id}/pdf', [PolizaPdfController::class, 'descargar'])->whereNumber('id');
+        Route::post('/polizas/{id}/cancelar', [PolizaController::class, 'cancelar'])->whereNumber('id');
+
+        // ── Coberturas contratadas en una póliza ──────────
+        Route::get('/polizas/{id}/coberturas', [PolizaCoberturaController::class, 'index']);
+        Route::put('/polizas/{id}/coberturas', [PolizaCoberturaController::class, 'update']);
 
         // ── Siniestros ──────────────────────────────────────
         Route::get('/siniestros', [SiniestroController::class, 'index']);
+
+        // Rutas fijas: SIEMPRE antes de /siniestros/{id}
+        Route::get('/siniestros/ajustadores', [SiniestroController::class, 'getAjustadores']);
         Route::get('/siniestros/reportes/por-id/{reporteId}', [SiniestroController::class, 'getReportePorId']);
         Route::get('/siniestros/reportes/por-rfc', [SiniestroController::class, 'getReportesPorRfc']);
         Route::get('/siniestros/polizas/por-rfc', [SiniestroController::class, 'getPolizasPorRfc']);
         Route::get('/siniestros/reportes/por-poliza/{polizaId}', [SiniestroController::class, 'getReportesPorPoliza']);
-        Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto']);
+
+        // Rutas con {id}
+        Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto'])->whereNumber('id');
         Route::post('/siniestros', [SiniestroController::class, 'store']);
-        Route::put('/siniestros/{id}', [SiniestroController::class, 'update']);
-        Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy']);
+        Route::post('/siniestros/{id}/estatus', [SiniestroController::class, 'cambiarEstatus']);
+        Route::post('/siniestros/{id}/ajustador', [SiniestroController::class, 'asignarAjustador']);
+        Route::post('/siniestros/{id}/arribo', [SiniestroController::class, 'registrarArribo']);
+        Route::put('/siniestros/{id}', [SiniestroController::class, 'update'])->whereNumber('id');
+        Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy'])->whereNumber('id');
+
+        // ── Documentos del siniestro ──────────────────────────
+        // Listado y alta
+        Route::get('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'index'])->whereNumber('id');
+        Route::post('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'store'])->whereNumber('id');
+
+        // Acciones sobre el conjunto (rutas fijas, sin {docId})
+        Route::post('/siniestros/{id}/documentos/solicitar', [SiniestroDocumentosController::class, 'solicitar'])->whereNumber('id');   // "+ Pedir documento"
+        Route::post('/siniestros/{id}/documentos/recordar', [SiniestroDocumentosController::class, 'recordar'])->whereNumber('id');     // "Recordar al cliente"
+
+        // Acciones sobre un documento concreto
+        Route::get('/siniestros/{id}/documentos/{docId}/descargar', [SiniestroDocumentosController::class, 'descargar'])->whereNumber(['id', 'docId']);
+        Route::post('/siniestros/{id}/documentos/{docId}/subir', [SiniestroDocumentosController::class, 'subir'])->whereNumber(['id', 'docId']);       // "Subir"
+        Route::post('/siniestros/{id}/documentos/{docId}/revisar', [SiniestroDocumentosController::class, 'revisar'])->whereNumber(['id', 'docId']);   // aprobar / rechazar
+        Route::post('/siniestros/{id}/documentos/{docId}/exentar', [SiniestroDocumentosController::class, 'exentar'])->whereNumber(['id', 'docId']);   // "Exentar"
+        Route::delete('/siniestros/{id}/documentos/{docId}', [SiniestroDocumentosController::class, 'destroy'])->whereNumber(['id', 'docId']);
+
+        // ── Catálogo de documentos y configuración (escribir exige 'siniestros.configurar') ──
+        Route::get('/catalogo-documentos', [CatalogoDocumentosController::class, 'index']);
+        Route::post('/catalogo-documentos', [CatalogoDocumentosController::class, 'store'])->middleware('permiso:siniestros.configurar');
+        Route::put('/catalogo-documentos/{id}', [CatalogoDocumentosController::class, 'update'])->middleware('permiso:siniestros.configurar');
+        Route::delete('/catalogo-documentos/{id}', [CatalogoDocumentosController::class, 'destroy'])->middleware('permiso:siniestros.configurar');
+        Route::get('/configuracion/siniestros', [ConfiguracionSiniestrosController::class, 'show']);
+        Route::put('/configuracion/siniestros', [ConfiguracionSiniestrosController::class, 'update'])->middleware('permiso:siniestros.configurar');
 
         // ── Bienes ─────────────────────────────────────
         Route::get('/bienes/cliente/{clienteId}', [BienesController::class, 'getByClienteId']);
@@ -207,22 +264,39 @@ Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, '
         // ── Reportes ─────────────────────────────────────
         Route::prefix('reportes')->group(function () {
             Route::get('/', [ReportesController::class, 'index']);
+            Route::get('/buscar-poliza', [ReportesController::class, 'buscarPoliza']); // ANTES de /{id}
             Route::post('/', [ReportesController::class, 'store']);
-            Route::get('/{id}', [ReportesController::class, 'show']);
-            Route::put('/{id}', [ReportesController::class, 'update']);
-            Route::delete('/{id}', [ReportesController::class, 'destroy']);
+            Route::get('/{id}', [ReportesController::class, 'show'])->whereNumber('id');
+            Route::put('/{id}', [ReportesController::class, 'update'])->whereNumber('id');
+            Route::post('/{id}/validar', [ReportesController::class, 'validar'])->whereNumber('id');
+            Route::post('/{id}/descartar', [ReportesController::class, 'descartar'])->whereNumber('id');
+            Route::delete('/{id}', [ReportesController::class, 'destroy'])->whereNumber('id');
         });
 
         // ── Evaluaciones ─────────────────────────────────────
         Route::get('/evaluaciones', [EvaluacionController::class, 'index']);
+        // OJO: pendientes-autorizacion va ANTES de /evaluaciones/{id}, si no Laravel la toma como un id
+        Route::get('/evaluaciones/pendientes-autorizacion', [EvaluacionFlujoController::class, 'pendientes']);
         Route::get('/evaluaciones/{id}', [EvaluacionController::class, 'show']);
 
-        // ── Indemnizaciones ───────────────────────────────────
-        Route::get('/indemnizaciones',          [IndemnizacionesController::class, 'index']);
-        Route::get('/indemnizaciones/{id}',     [IndemnizacionesController::class, 'show']);
-        Route::post('/indemnizaciones',         [IndemnizacionesController::class, 'store']);
-        Route::put('/indemnizaciones/{id}',     [IndemnizacionesController::class, 'update']);
-        Route::delete('/indemnizaciones/{id}',  [IndemnizacionesController::class, 'destroy']);
+        // ── Evaluaciones (flujo) ─────────────────────────────
+        Route::post('/siniestros/{id}/evaluaciones/calcular', [EvaluacionFlujoController::class, 'calcular']);
+        Route::post('/siniestros/{id}/evaluaciones',          [EvaluacionFlujoController::class, 'store']);
+        Route::put('/evaluaciones/{id}',                      [EvaluacionFlujoController::class, 'update']);
+        Route::post('/evaluaciones/{id}/enviar',              [EvaluacionFlujoController::class, 'enviar']);
+        Route::post('/evaluaciones/{id}/resolver',            [EvaluacionFlujoController::class, 'resolver']);
+
+        // ── Indemnizaciones (las genera el sistema) ───────────
+        Route::get('/indemnizaciones',      [IndemnizacionesController::class, 'index']);
+        Route::get('/indemnizaciones/{id}', [IndemnizacionesController::class, 'show']);
+        Route::post('/indemnizaciones/{id}/confirmar-pago', [IndemnizacionesController::class, 'confirmarPago'])->middleware('permiso:indemnizaciones.confirmar');
+        Route::post('/indemnizaciones/{id}/pagar',          [IndemnizacionesController::class, 'pagar'])->middleware('permiso:indemnizaciones.pagar');
+        Route::post('/indemnizaciones/{id}/cancelar',       [IndemnizacionesController::class, 'cancelar'])->middleware('permiso:indemnizaciones.pagar');
+        Route::post('/siniestros/{id}/indemnizacion/generar', [IndemnizacionesController::class, 'generar'])->middleware('permiso:indemnizaciones.pagar');
+
+        // ── Para las pestañas del expediente ──────────────────
+        Route::get('/siniestros/{id}/indemnizaciones', [IndemnizacionesController::class, 'porSiniestro']);
+        Route::get('/siniestros/{id}/evaluaciones',    [EvaluacionFlujoController::class, 'porSiniestro']);
 
         // ── Renovaciones de Pólizas ────────────────────────────
         Route::get('/renovaciones', [RenovacionController::class, 'index']);
@@ -243,11 +317,17 @@ Route::post('evidencias/reporte/generar', [ReporteEvidenciasController::class, '
             Route::get('/ultimos-siniestros', [DashboardController::class, 'ultimosSiniestros']);
         });
 
-        // ── Exportaciones (Excel / CSV / PDF) ──────────
+        // ── Papelera (solo administrador; lo valida el controlador) ──
+        Route::get('/papelera/resumen', [PapeleraController::class, 'resumen']);
+        Route::get('/papelera/{modulo}', [PapeleraController::class, 'index']);
+        Route::post('/papelera/{modulo}/{id}/restaurar', [PapeleraController::class, 'restaurar']);
+        Route::delete('/papelera/{modulo}/{id}', [PapeleraController::class, 'destroy']);
+
+        // ── Exportaciones (Excel / CSV / PDF) ──
         foreach (config('exportables', []) as $slug => $cfg) {
             $middleware = !empty($cfg['permiso']) ? ['permiso:' . $cfg['permiso']] : [];
 
-            Route::get("/exportar/{$slug}", [ExportController::class, 'exportar'])
+            Route::get("/exportar/{$slug}", [ExportController::class, 'descargar'])
                 ->defaults('catalogo', $slug)
                 ->middleware($middleware);
 

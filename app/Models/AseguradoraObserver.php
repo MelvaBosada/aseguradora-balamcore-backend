@@ -17,6 +17,7 @@ class AseguradoraObserver
         'evaluaciones',
         'bienes',
         'coberturas',
+        'evidencias',
     ];
 
     public function created(Aseguradora $aseguradora): void

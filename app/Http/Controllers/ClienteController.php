@@ -11,18 +11,64 @@ use Illuminate\Support\Facades\Validator;
 class ClienteController extends Controller
 {
     /**
+     * Mensajes de validación en español
+     */
+    private function mensajes(): array
+    {
+        return [
+            'required' => 'El campo :attribute es obligatorio.',
+            'string' => 'El campo :attribute debe ser texto.',
+            'email' => 'El campo :attribute debe ser un correo válido.',
+            'date' => 'El campo :attribute debe ser una fecha válida.',
+            'in' => 'El valor seleccionado en :attribute no es válido.',
+            'max.string' => 'El campo :attribute no debe tener más de :max caracteres.',
+            'size.string' => 'El campo :attribute debe tener exactamente :size caracteres.',
+            'unique' => 'El :attribute ya está registrado.',
+        ];
+    }
+
+    /**
+     * Nombres amigables de los campos
+     */
+    private function atributos(): array
+    {
+        return [
+            'nombre' => 'nombre',
+            'apellido' => 'apellido',
+            'telefono' => 'teléfono',
+            'correo' => 'correo',
+            'rfc' => 'RFC',
+            'curp' => 'CURP',
+            'domicilio' => 'domicilio',
+            'fechaAlta' => 'fecha de alta',
+            'fecha_nacimiento' => 'fecha de nacimiento',
+            'genero' => 'género',
+            'estado_civil' => 'estado civil',
+            'nacionalidad' => 'nacionalidad',
+            'tipo_identificacion' => 'tipo de identificación',
+            'numero_identificacion' => 'número de identificación',
+            'telefono_alternativo' => 'teléfono alternativo',
+            'municipio' => 'municipio',
+            'estado' => 'estado',
+            'codigo_postal' => 'código postal',
+            'ocupacion' => 'ocupación',
+            'estatus' => 'estatus',
+        ];
+    }
+
+    /**
      * Obtener listado de clientes con paginación
      */
     public function index(Request $request)
     {
         $user = auth()->user();
-        
+
         $query = Cliente::where('id_aseguradora', $user->id_aseguradora);
 
         // Filtro por búsqueda
         if ($request->has('search') && $request->search) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->where(function ($q) use ($search) {
                 $q->where('nombre', 'LIKE', "%{$search}%")
                   ->orWhere('apellidos', 'LIKE', "%{$search}%")
                   ->orWhere('rfc', 'LIKE', "%{$search}%")
@@ -42,7 +88,7 @@ class ClienteController extends Controller
         $clientes = $query->orderBy('id', 'desc')->paginate($perPage);
 
         // Transformar datos para que coincidan con el frontend (TODOS los campos)
-        $clientes->getCollection()->transform(function($cliente) {
+        $clientes->getCollection()->transform(function ($cliente) {
             return [
                 'id' => $cliente->id,
                 'nombre' => $cliente->nombre,
@@ -84,11 +130,11 @@ class ClienteController extends Controller
     public function show($id)
     {
         $user = auth()->user();
-        
+
         $cliente = Cliente::where('id', $id)
             ->where('id_aseguradora', $user->id_aseguradora)
             ->firstOrFail();
-        
+
         return response()->json([
             'id' => $cliente->id,
             'nombre' => $cliente->nombre,
@@ -125,7 +171,7 @@ class ClienteController extends Controller
             'telefono' => 'required|string|max:15',
             'correo' => 'required|email|max:100|unique:clientes,correo',
             'rfc' => 'required|string|max:13|unique:clientes,rfc',
-            'curp' => 'required|string|max:16|unique:clientes,curp',
+            'curp' => 'required|string|size:18|unique:clientes,curp',
             'domicilio' => 'required|string|max:255',
             'fechaAlta' => 'nullable|date',
             'fecha_nacimiento' => 'nullable|date',
@@ -139,7 +185,7 @@ class ClienteController extends Controller
             'estado' => 'nullable|string|max:50',
             'codigo_postal' => 'nullable|string|max:10',
             'ocupacion' => 'nullable|string|max:100',
-        ]);
+        ], $this->mensajes(), $this->atributos());
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -147,7 +193,7 @@ class ClienteController extends Controller
 
         // Obtener id_aseguradora e id_usuario del usuario autenticado
         $user = auth()->user();
-        
+
         $cliente = Cliente::create([
             'id_aseguradora' => $user->id_aseguradora,
             'id_usuario' => $user->id,
@@ -185,7 +231,7 @@ class ClienteController extends Controller
     public function update(Request $request, $id)
     {
         $user = auth()->user();
-        
+
         $cliente = Cliente::where('id', $id)
             ->where('id_aseguradora', $user->id_aseguradora)
             ->firstOrFail();
@@ -196,13 +242,21 @@ class ClienteController extends Controller
             'telefono' => 'string|max:15',
             'correo' => 'email|max:100|unique:clientes,correo,' . $id,
             'rfc' => 'string|max:13|unique:clientes,rfc,' . $id,
-            'curp' => 'string|max:16|unique:clientes,curp,' . $id,
+            'curp' => 'string|size:18|unique:clientes,curp,' . $id,
             'domicilio' => 'string|max:255',
             'fecha_nacimiento' => 'nullable|date',
             'genero' => 'nullable|in:masculino,femenino,otro',
             'estado_civil' => 'nullable|in:soltero,casado,divorciado,viudo,union_libre',
+            'nacionalidad' => 'nullable|string|max:50',
+            'tipo_identificacion' => 'nullable|in:ine,pasaporte,cedula_profesional,licencia',
+            'numero_identificacion' => 'nullable|string|max:30',
+            'telefono_alternativo' => 'nullable|string|max:15',
+            'municipio' => 'nullable|string|max:100',
+            'estado' => 'nullable|string|max:50',
+            'codigo_postal' => 'nullable|string|max:10',
+            'ocupacion' => 'nullable|string|max:100',
             'estatus' => 'nullable|in:activo,inactivo,suspendido',
-        ]);
+        ], $this->mensajes(), $this->atributos());
 
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
@@ -214,11 +268,19 @@ class ClienteController extends Controller
             'fecha_nacimiento' => $request->fecha_nacimiento ?? $cliente->fecha_nacimiento,
             'genero' => $request->genero ?? $cliente->genero,
             'estado_civil' => $request->estado_civil ?? $cliente->estado_civil,
+            'nacionalidad' => $request->nacionalidad ?? $cliente->nacionalidad,
             'curp' => $request->curp ?? $cliente->curp,
             'rfc' => $request->rfc ?? $cliente->rfc,
+            'tipo_identificacion' => $request->tipo_identificacion ?? $cliente->tipo_identificacion,
+            'numero_identificacion' => $request->numero_identificacion ?? $cliente->numero_identificacion,
             'numero_de_telefono' => $request->telefono ?? $cliente->numero_de_telefono,
+            'telefono_alternativo' => $request->telefono_alternativo ?? $cliente->telefono_alternativo,
             'correo' => $request->correo ?? $cliente->correo,
             'domicilio' => $request->domicilio ?? $cliente->domicilio,
+            'municipio' => $request->municipio ?? $cliente->municipio,
+            'estado' => $request->estado ?? $cliente->estado,
+            'codigo_postal' => $request->codigo_postal ?? $cliente->codigo_postal,
+            'ocupacion' => $request->ocupacion ?? $cliente->ocupacion,
             'estatus' => $request->estatus ?? $cliente->estatus,
         ]);
 
@@ -234,22 +296,22 @@ class ClienteController extends Controller
     public function destroy($id)
     {
         $user = auth()->user();
-        
+
         $cliente = Cliente::where('id', $id)
             ->where('id_aseguradora', $user->id_aseguradora)
             ->firstOrFail();
-        
+
         // Verificar si tiene pólizas asociadas
         $tienePolizas = DB::table('polizas')->where('id_cliente', $id)->exists();
-        
+
         if ($tienePolizas) {
             return response()->json([
                 'message' => 'No se puede eliminar el cliente porque tiene pólizas asociadas'
             ], 400);
         }
-        
+
         $cliente->delete();
-        
+
         return response()->json([
             'message' => 'Cliente eliminado exitosamente'
         ]);
