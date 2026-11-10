@@ -2,11 +2,43 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Siniestro;
+use App\Services\SiniestroEstadoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
+    /**
+     * Siniestros que el usuario puede ver (su aseguradora y, sin "siniestros.ver_todos",
+     * solo los que lleva). Los datos de pólizas, clientes e ingresos siguen siendo de toda la aseguradora.
+     */
+    private function siniestros(Request $request)
+    {
+        return Siniestro::visiblePara($request->user());
+    }
+
+    /** Subconsulta con los ids de siniestro visibles, para filtrar indemnizaciones. */
+    private function idsVisibles(Request $request)
+    {
+        return $this->siniestros($request)->select('siniestros.id');
+    }
+
+    /** Pagos efectivamente realizados en un mes/año (solo indemnizaciones "pagada"). */
+    private function pagado(Request $request, ?int $mes, int $anio): float
+    {
+        $q = DB::table('indemnizaciones')
+            ->whereIn('id_siniestro', $this->idsVisibles($request))
+            ->where('estatus', 'pagada')
+            ->whereYear('fecha_pago', $anio);
+
+        if ($mes) {
+            $q->whereMonth('fecha_pago', $mes);
+        }
+
+        return (float) $q->sum('monto_aprobado');
+    }
+
     // ── KPIs ─────────────────────────────────────────────
     public function kpis(Request $request)
     {
@@ -24,16 +56,15 @@ class DashboardController extends Controller
             ->whereYear('fecha_emision', now()->year)
             ->count();
 
-        $siniestrosActivos = DB::table('siniestros')
-            ->where('id_aseguradora', $idAseguradora)
-            ->whereIn('estatus', ['abierto', 'en_proceso', 'en_evaluacion'])
+        // Activo = todo lo que no esté pagado, rechazado, cancelado o cerrado
+        $siniestrosActivos = $this->siniestros($request)
+            ->whereNotIn('siniestros.estatus', Siniestro::ESTATUS_SIN_CARGA)
             ->count();
 
-        $siniestrosMes = DB::table('siniestros')
-            ->where('id_aseguradora', $idAseguradora)
-            ->whereIn('estatus', ['abierto', 'en_proceso', 'en_evaluacion'])
-            ->whereMonth('fecha_creacion', now()->month)
-            ->whereYear('fecha_creacion', now()->year)
+        $siniestrosMes = $this->siniestros($request)
+            ->whereNotIn('siniestros.estatus', Siniestro::ESTATUS_SIN_CARGA)
+            ->whereMonth('siniestros.fecha_creacion', now()->month)
+            ->whereYear('siniestros.fecha_creacion', now()->year)
             ->count();
 
         $clientes = DB::table('clientes')
@@ -47,27 +78,22 @@ class DashboardController extends Controller
             ->whereYear('fecha_registro', now()->year)
             ->count();
 
-        $pagosPendientes = DB::table('indemnizaciones')
-            ->join('siniestros', 'indemnizaciones.id_siniestro', '=', 'siniestros.id')
-            ->where('siniestros.id_aseguradora', $idAseguradora)
-            ->where('indemnizaciones.estatus', 'pendiente')
-            ->sum('indemnizaciones.monto_aprobado');
+        $pendientes = DB::table('indemnizaciones')
+            ->whereIn('id_siniestro', $this->idsVisibles($request))
+            ->whereIn('estatus', ['pendiente', 'autorizada']);
 
-        $pagosPendientesCount = DB::table('indemnizaciones')
-            ->join('siniestros', 'indemnizaciones.id_siniestro', '=', 'siniestros.id')
-            ->where('siniestros.id_aseguradora', $idAseguradora)
-            ->where('indemnizaciones.estatus', 'pendiente')
-            ->count();
+        $pagosPendientes      = (clone $pendientes)->sum('monto_aprobado');
+        $pagosPendientesCount = (clone $pendientes)->count();
 
         return response()->json([
-            'polizas_activas'       => $polizasActivas,
-            'polizas_este_mes'      => $polizasMes,
-            'siniestros_activos'    => $siniestrosActivos,
-            'siniestros_este_mes'   => $siniestrosMes,
-            'clientes'              => $clientes,
-            'clientes_este_mes'     => $clientesMes,
-            'pagos_pendientes'      => $pagosPendientes,
-            'pagos_pendientes_count'=> $pagosPendientesCount,
+            'polizas_activas'        => $polizasActivas,
+            'polizas_este_mes'       => $polizasMes,
+            'siniestros_activos'     => $siniestrosActivos,
+            'siniestros_este_mes'    => $siniestrosMes,
+            'clientes'               => $clientes,
+            'clientes_este_mes'      => $clientesMes,
+            'pagos_pendientes'       => $pagosPendientes,
+            'pagos_pendientes_count' => $pagosPendientesCount,
         ]);
     }
 
@@ -76,38 +102,27 @@ class DashboardController extends Controller
     {
         $idAseguradora = $request->user()->id_aseguradora;
         $filtro        = $request->query('filtro', 'mensual'); // mensual | anual
+        $data          = [];
 
         if ($filtro === 'mensual') {
             // Últimos 6 meses
-            $data = [];
             for ($i = 5; $i >= 0; $i--) {
-                $fecha  = now()->subMonths($i);
-                $mes    = $fecha->format('M');
-                $month  = $fecha->month;
-                $year   = $fecha->year;
+                $fecha = now()->subMonths($i);
 
                 $ingresos = DB::table('polizas')
                     ->where('id_aseguradora', $idAseguradora)
-                    ->whereMonth('fecha_emision', $month)
-                    ->whereYear('fecha_emision', $year)
+                    ->whereMonth('fecha_emision', $fecha->month)
+                    ->whereYear('fecha_emision', $fecha->year)
                     ->sum('prima_total');
 
-                $siniestros = DB::table('indemnizaciones')
-                    ->join('siniestros', 'indemnizaciones.id_siniestro', '=', 'siniestros.id')
-                    ->where('siniestros.id_aseguradora', $idAseguradora)
-                    ->whereMonth('indemnizaciones.fecha_pago', $month)
-                    ->whereYear('indemnizaciones.fecha_pago', $year)
-                    ->sum('indemnizaciones.monto_aprobado');
-
                 $data[] = [
-                    'periodo'    => $mes,
+                    'periodo'    => $fecha->format('M'),
                     'ingresos'   => round($ingresos, 2),
-                    'siniestros' => round($siniestros, 2),
+                    'siniestros' => round($this->pagado($request, $fecha->month, $fecha->year), 2),
                 ];
             }
         } else {
             // Últimos 5 años
-            $data = [];
             for ($i = 4; $i >= 0; $i--) {
                 $year = now()->subYears($i)->year;
 
@@ -116,16 +131,10 @@ class DashboardController extends Controller
                     ->whereYear('fecha_emision', $year)
                     ->sum('prima_total');
 
-                $siniestros = DB::table('indemnizaciones')
-                    ->join('siniestros', 'indemnizaciones.id_siniestro', '=', 'siniestros.id')
-                    ->where('siniestros.id_aseguradora', $idAseguradora)
-                    ->whereYear('indemnizaciones.fecha_pago', $year)
-                    ->sum('indemnizaciones.monto_aprobado');
-
                 $data[] = [
                     'periodo'    => (string) $year,
                     'ingresos'   => round($ingresos, 2),
-                    'siniestros' => round($siniestros, 2),
+                    'siniestros' => round($this->pagado($request, null, $year), 2),
                 ];
             }
         }
@@ -148,41 +157,37 @@ class DashboardController extends Controller
         return response()->json($data->values());
     }
 
-    // ── TENDENCIA SINIESTROS ──────────────────────────────
+    // ── TENDENCIA SINIESTROS (monto reclamado) ───────────
     public function tendenciaSiniestros(Request $request)
     {
-        $idAseguradora = $request->user()->id_aseguradora;
-        $filtro        = $request->query('filtro', 'mensual');
+        $filtro = $request->query('filtro', 'mensual');
+        $data   = [];
 
         if ($filtro === 'mensual') {
-            $data = [];
             for ($i = 5; $i >= 0; $i--) {
                 $fecha = now()->subMonths($i);
 
-                $count = DB::table('siniestros')
-                    ->where('id_aseguradora', $idAseguradora)
-                    ->whereMonth('fecha_creacion', $fecha->month)
-                    ->whereYear('fecha_creacion', $fecha->year)
-                    ->sum('monto_reclamado');
+                $monto = $this->siniestros($request)
+                    ->whereMonth('siniestros.fecha_creacion', $fecha->month)
+                    ->whereYear('siniestros.fecha_creacion', $fecha->year)
+                    ->sum('siniestros.monto_reclamado');
 
                 $data[] = [
                     'periodo'    => $fecha->format('M'),
-                    'siniestros' => round($count, 2),
+                    'siniestros' => round($monto, 2),
                 ];
             }
         } else {
-            $data = [];
             for ($i = 4; $i >= 0; $i--) {
                 $year = now()->subYears($i)->year;
 
-                $count = DB::table('siniestros')
-                    ->where('id_aseguradora', $idAseguradora)
-                    ->whereYear('fecha_creacion', $year)
-                    ->sum('monto_reclamado');
+                $monto = $this->siniestros($request)
+                    ->whereYear('siniestros.fecha_creacion', $year)
+                    ->sum('siniestros.monto_reclamado');
 
                 $data[] = [
                     'periodo'    => (string) $year,
-                    'siniestros' => round($count, 2),
+                    'siniestros' => round($monto, 2),
                 ];
             }
         }
@@ -193,13 +198,11 @@ class DashboardController extends Controller
     // ── ÚLTIMOS SINIESTROS ────────────────────────────────
     public function ultimosSiniestros(Request $request)
     {
-        $idAseguradora = $request->user()->id_aseguradora;
-
         $data = DB::table('siniestros')
             ->join('reportes', 'siniestros.id_reporte', '=', 'reportes.id')
             ->join('polizas', 'reportes.id_poliza', '=', 'polizas.id')
             ->join('clientes', 'polizas.id_cliente', '=', 'clientes.id')
-            ->where('siniestros.id_aseguradora', $idAseguradora)
+            ->whereIn('siniestros.id', $this->idsVisibles($request))
             ->orderBy('siniestros.fecha_creacion', 'desc')
             ->limit(5)
             ->select(
@@ -209,7 +212,12 @@ class DashboardController extends Controller
                 'siniestros.fecha_creacion as fecha',
                 'siniestros.estatus as estado'
             )
-            ->get();
+            ->get()
+            ->map(function ($r) {
+                // "estado" sigue siendo el valor interno; "estado_label" es el texto para mostrar
+                $r->estado_label = SiniestroEstadoService::etiqueta($r->estado);
+                return $r;
+            });
 
         return response()->json($data);
     }

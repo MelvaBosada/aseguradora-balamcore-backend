@@ -17,6 +17,7 @@ class Evidencias extends Model
     protected $fillable = [
         'id_siniestro',
         'id_bien',
+        'id_validador',
         'tipo',
         'categoria',
         'nombre_archivo',
@@ -42,14 +43,27 @@ class Evidencias extends Model
         'fecha_validacion' => 'datetime',
     ];
 
-    // Se agrega al JSON para que el front pueda mostrar la imagen/archivo
-    protected $appends = ['url_archivo'];
+    // Sin URL pública: el archivo solo se entrega por GET /evidencias/{id}/descargar con sesión.
 
-    protected function urlArchivo(): Attribute
+    // Columnas calculadas que usa config/exportables.php
+    protected function tamanoLegible(): Attribute
     {
-        return Attribute::get(
-            fn () => $this->ruta_archivo ? asset('storage/' . $this->ruta_archivo) : null
-        );
+        return Attribute::get(function () {
+            $b = (int) $this->tamano_bytes;
+            if ($b < 1024) return $b . ' B';
+            if ($b < 1048576) return number_format($b / 1024, 1) . ' KB';
+            return number_format($b / 1048576, 2) . ' MB';
+        });
+    }
+
+    protected function fechaSubidaTexto(): Attribute
+    {
+        return Attribute::get(fn () => $this->fecha_subida?->format('d/m/Y H:i'));
+    }
+
+    protected function fechaRevisionTexto(): Attribute
+    {
+        return Attribute::get(fn () => $this->fecha_validacion?->format('d/m/Y H:i'));
     }
 
     // Relaciones
@@ -79,20 +93,22 @@ class Evidencias extends Model
         return $query->where('id_siniestro', $idSiniestro);
     }
 
-    // Helpers
-    public function marcarComoValidada(): void
+    // Helpers (id_validador = id del usuario que revisó)
+    public function marcarComoValidada(?int $idValidador = null): void
     {
         $this->update([
             'estatus_validacion' => 'validada',
+            'id_validador' => $idValidador,
             'fecha_validacion' => now(),
             'motivo_rechazo' => null,
         ]);
     }
 
-    public function marcarComoRechazada(string $motivo): void
+    public function marcarComoRechazada(string $motivo, ?int $idValidador = null): void
     {
         $this->update([
             'estatus_validacion' => 'rechazada',
+            'id_validador' => $idValidador,
             'fecha_validacion' => now(),
             'motivo_rechazo' => $motivo,
         ]);

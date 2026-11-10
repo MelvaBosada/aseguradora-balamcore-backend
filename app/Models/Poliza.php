@@ -59,4 +59,10 @@ class Poliza extends Model
     {
         return $this->hasMany(PolizaEndoso::class, 'id_poliza')->orderByDesc('consecutivo');
     }
+
+    // Coberturas contratadas en la póliza
+    public function coberturas()
+    {
+        return $this->belongsToMany(Cobertura::class, 'polizas_x_cobertura', 'id_poliza', 'id_cobertura');
+    }
 }

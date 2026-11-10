@@ -17,6 +17,7 @@ class AseguradoraObserver
         'evaluaciones',
         'bienes',
         'coberturas',
+        'evidencias',
     ];
 
     public function created(Aseguradora $aseguradora): void
@@ -41,5 +42,7 @@ class AseguradoraObserver
                 ]);
             }
         }
+
+        \App\Support\CatalogoDocumentosBase::sembrar($aseguradora->id);
     }
 }

@@ -14,6 +14,7 @@ class PolizaEndoso extends Model
         'id_poliza', 'id_aseguradora', 'id_usuario',
         'consecutivo', 'numero_endoso', 'descripcion', 'cambios',
         'documento_ruta', 'documento_nombre', 'documento_tamanio',
+        'fecha_efecto',
     ];
 
     protected $hidden = ['documento_ruta'];

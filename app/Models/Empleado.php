@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class Empleado extends Model
@@ -24,4 +25,50 @@ class Empleado extends Model
         'contacto_emergencia_telefono',
         'baja_por',
     ];
+
+    public function usuario()
+    {
+        return $this->belongsTo(Usuario::class, 'id_usuario');
+    }
+
+    public function aseguradora()
+    {
+        return $this->belongsTo(Aseguradora::class, 'id_aseguradora');
+    }
+
+    /** Siniestros que lleva este empleado. */
+    public function siniestros()
+    {
+        return $this->hasMany(Siniestro::class, 'id_empleado');
+    }
+
+    public function getNombreCompletoAttribute(): string
+    {
+        return trim($this->nombre . ' ' . $this->apellidos);
+    }
+
+    /**
+     * Único criterio de "quién puede llevar siniestros": ajustadores activos de la aseguradora.
+     * Lo usan la auto-asignación, el listado del formulario y la validación de reasignación.
+     */
+    public static function ajustadoresActivos(int $idAseguradora): Builder
+    {
+        return static::query()
+            ->where('id_aseguradora', $idAseguradora)
+            ->where('tipo_empleado', 'ajustador')
+            ->where('estado_laboral', 'activo');
+    }
+
+    /**
+     * Ajustador activo con menos siniestros en curso (desempata por id).
+     * Devuelve null si la aseguradora no tiene ajustadores activos.
+     */
+    public static function ajustadorMenosCargado(int $idAseguradora): ?self
+    {
+        return static::ajustadoresActivos($idAseguradora)
+            ->withCount(['siniestros as carga' => fn ($q) => $q->whereNotIn('estatus', Siniestro::ESTATUS_SIN_CARGA)])
+            ->orderBy('carga')
+            ->orderBy('id')
+            ->first();
+    }
 }

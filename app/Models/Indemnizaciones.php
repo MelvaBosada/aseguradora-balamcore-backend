@@ -9,13 +9,10 @@ class Indemnizaciones extends Model
 {
     use HasFactory;
 
-    // Nombre de la tabla (opcional si el modelo se llama igual, pero buena práctica)
     protected $table = 'indemnizaciones';
-
-    // Como tu migración no tiene $table->timestamps(), desactivamos la gestión automática
     public $timestamps = false;
 
-    // Campos que permitimos que Laravel guarde mediante asignación masiva
+    // Las crea el sistema (IndemnizacionService); ya no se llenan desde la API con datos libres.
     protected $fillable = [
         'id_siniestro',
         'id_empleado',
@@ -28,16 +25,29 @@ class Indemnizaciones extends Model
         'fecha_autorizacion',
         'fecha_pago',
         'estatus',
-        'observaciones'
+        'observaciones',
+        'referencia_pago',
+        'id_autorizador_pago',
+        'id_pagador',
+        'motivo_cancelacion',
+        'desglose',
+        'fecha_generacion',
     ];
 
-    /**
-     * Relaciones (Opcionales por si luego quieres usarlas)
-     */
-    
-    // Relación con el siniestro
+    protected $casts = [
+        'monto_aprobado'     => 'decimal:2',
+        'desglose'           => 'array',
+        'fecha_pago'         => 'datetime',
+        'fecha_generacion'   => 'datetime',
+    ];
+
     public function siniestro()
     {
         return $this->belongsTo(Siniestro::class, 'id_siniestro');
+    }
+
+    public function evaluacion()
+    {
+        return $this->belongsTo(Evaluacion::class, 'id_evaluaciones');
     }
 }
