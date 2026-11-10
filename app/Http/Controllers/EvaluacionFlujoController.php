@@ -27,9 +27,13 @@ class EvaluacionFlujoController extends Controller
             'causas'           => ['required', 'string', 'min:5', 'max:255'],
             'responsable'      => ['nullable', 'string', 'max:255'],
             'recomendacion'    => ['required', Rule::in(['reparar', 'reemplazar', 'indemnizar', 'rechazar'])],
-            'costo_reparacion' => ['required_if:recomendacion,reparar', 'nullable', 'numeric', 'min:0', 'max:9999999999.99'],
-            'costo_remplazo'   => ['required_if:recomendacion,reemplazar,indemnizar', 'nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            // Qué datos se piden depende del ramo de la póliza: lo valida CalculoIndemnizacionService
+            'costo_reparacion' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'costo_remplazo'   => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
             'valor_residual'   => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'valor_real_bien'  => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'gastos_procedentes' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'conserva_salvamento' => ['nullable', Rule::in(['aseguradora', 'asegurado'])],
             'id_cobertura'     => ['nullable', 'integer'],
         ];
     }
@@ -63,6 +67,9 @@ class EvaluacionFlujoController extends Controller
             'costo_reparacion'   => $e->costo_reparacion,
             'costo_remplazo'     => $e->costo_remplazo,
             'valor_residual'     => $e->valor_residual,
+            'valor_real_bien'    => $e->valor_real_bien,
+            'gastos_procedentes' => $e->gastos_procedentes,
+            'conserva_salvamento' => $e->conserva_salvamento,
             'monto_evaluado'     => $e->monto_evaluado,
             'monto_recomendado'  => $e->monto_recomendado,
             'nivel_autorizacion' => $e->nivel_autorizacion,

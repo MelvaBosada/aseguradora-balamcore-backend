@@ -11,6 +11,7 @@ class ConfiguracionSiniestrosController extends Controller
     private const CAMPOS = [
         'dias_aviso_siniestro', 'dias_limite_documentos', 'dias_recordatorio',
         'max_recordatorios', 'monto_auto_hasta', 'monto_supervisor_hasta', 'doble_control_pago',
+        'aplicar_infraseguro', 'salvamento_default', 'umbral_perdida_total', 'tasa_iva', 'ramos_exentos_iva',
     ];
 
     public function show(Request $request)
@@ -30,6 +31,12 @@ class ConfiguracionSiniestrosController extends Controller
             'monto_auto_hasta'       => ['sometimes', 'numeric', 'min:0', 'max:9999999999.99'],
             'monto_supervisor_hasta' => ['sometimes', 'numeric', 'min:0', 'max:9999999999.99'],
             'doble_control_pago'     => ['sometimes', 'boolean'],
+            'aplicar_infraseguro'    => ['sometimes', 'boolean'],
+            'salvamento_default'     => ['sometimes', 'in:aseguradora,asegurado'],
+            'umbral_perdida_total'   => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'tasa_iva'               => ['sometimes', 'numeric', 'min:0', 'max:30'],
+            'ramos_exentos_iva'      => ['sometimes', 'array'],
+            'ramos_exentos_iva.*'    => ['in:vida,gastos_medicos,autos,hogar,empresarial,responsabilidad_civil,otro'],
         ]);
 
         $config = AseguradoraConfiguracion::de((int) $request->user()->id_aseguradora);

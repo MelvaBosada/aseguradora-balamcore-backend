@@ -41,6 +41,9 @@ use App\Http\Controllers\ConfiguracionSiniestrosController;
 use App\Http\Controllers\PolizaCoberturaController;
 use App\Http\Controllers\EvaluacionFlujoController;
 use App\Http\Controllers\MarcaAseguradoraController;
+use App\Http\Controllers\PolizaPdfController;
+
+
 
 
 
@@ -178,9 +181,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/polizas/buscar-ultima-por-rfc', [PolizaController::class, 'getUltimaPolizaPorRfc']);
         Route::post('/polizas/{id}/asignar-bienes', [PolizaController::class, 'asignarBienes']);
         Route::get('/polizas/buscar-cliente', [PolizaController::class, 'buscarClientePorRfc']);
+        Route::get('/polizas/parametros', [PolizaController::class, 'parametros']);
         Route::apiResource('polizas', PolizaController::class);
         Route::get('/polizas/{id}/documento', [PolizaController::class, 'documento']);
         Route::get('/polizas/{id}/endosos/{endosoId}/documento', [PolizaController::class, 'documentoEndoso']);
+        Route::get('/polizas/{id}/pdf', [PolizaPdfController::class, 'descargar'])->whereNumber('id');
+        Route::post('/polizas/{id}/cancelar', [PolizaController::class, 'cancelar'])->whereNumber('id');
 
         // ── Coberturas contratadas en una póliza ──────────
         Route::get('/polizas/{id}/coberturas', [PolizaCoberturaController::class, 'index']);
@@ -204,6 +210,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/siniestros/{id}/arribo', [SiniestroController::class, 'registrarArribo']);
         Route::put('/siniestros/{id}', [SiniestroController::class, 'update'])->whereNumber('id');
         Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy'])->whereNumber('id');
+
+        // ── Documentos del siniestro ──────────────────────────
+        // Listado y alta
+        Route::get('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'index'])->whereNumber('id');
+        Route::post('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'store'])->whereNumber('id');
+
+        // Acciones sobre el conjunto (rutas fijas, sin {docId})
+        Route::post('/siniestros/{id}/documentos/solicitar', [SiniestroDocumentosController::class, 'solicitar'])->whereNumber('id');   // "+ Pedir documento"
+        Route::post('/siniestros/{id}/documentos/recordar', [SiniestroDocumentosController::class, 'recordar'])->whereNumber('id');     // "Recordar al cliente"
+
+        // Acciones sobre un documento concreto
+        Route::get('/siniestros/{id}/documentos/{docId}/descargar', [SiniestroDocumentosController::class, 'descargar'])->whereNumber(['id', 'docId']);
+        Route::post('/siniestros/{id}/documentos/{docId}/subir', [SiniestroDocumentosController::class, 'subir'])->whereNumber(['id', 'docId']);       // "Subir"
+        Route::post('/siniestros/{id}/documentos/{docId}/revisar', [SiniestroDocumentosController::class, 'revisar'])->whereNumber(['id', 'docId']);   // aprobar / rechazar
+        Route::post('/siniestros/{id}/documentos/{docId}/exentar', [SiniestroDocumentosController::class, 'exentar'])->whereNumber(['id', 'docId']);   // "Exentar"
+        Route::delete('/siniestros/{id}/documentos/{docId}', [SiniestroDocumentosController::class, 'destroy'])->whereNumber(['id', 'docId']);
 
         // ── Catálogo de documentos y configuración (escribir exige 'siniestros.configurar') ──
         Route::get('/catalogo-documentos', [CatalogoDocumentosController::class, 'index']);

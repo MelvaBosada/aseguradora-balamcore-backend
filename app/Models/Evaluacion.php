@@ -32,6 +32,10 @@ class Evaluacion extends Model
         'fecha_autorizacion',
         'motivo_resolucion',
         'fecha_envio',
+        // fase 8
+        'valor_real_bien',
+        'gastos_procedentes',
+        'conserva_salvamento',
     ];
 
     protected $casts = [
@@ -44,6 +48,8 @@ class Evaluacion extends Model
         'valor_residual'     => 'decimal:2',
         'monto_recomendado'  => 'decimal:2',
         'monto_evaluado'     => 'decimal:2',
+        'valor_real_bien'    => 'decimal:2',
+        'gastos_procedentes' => 'decimal:2',
         'calculo'            => 'array',
     ];
 

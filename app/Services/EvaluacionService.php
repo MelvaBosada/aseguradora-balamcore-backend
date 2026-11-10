@@ -71,6 +71,9 @@ class EvaluacionService
                 'costo_reparacion'   => $datos['costo_reparacion'],
                 'costo_remplazo'     => $datos['costo_remplazo'],
                 'valor_residual'     => $datos['valor_residual'],
+                'valor_real_bien'    => $datos['valor_real_bien'],
+                'gastos_procedentes' => $datos['gastos_procedentes'],
+                'conserva_salvamento' => $datos['conserva_salvamento'],
                 'monto_evaluado'     => $calc['monto_evaluado'],
                 'monto_recomendado'  => $calc['monto_final'],
                 'id_cobertura'       => $calc['id_cobertura'],
@@ -119,6 +122,9 @@ class EvaluacionService
                 'costo_reparacion' => $e->costo_reparacion,
                 'costo_remplazo'   => $e->costo_remplazo,
                 'valor_residual'   => $e->valor_residual,
+                'valor_real_bien'  => $e->valor_real_bien,
+                'gastos_procedentes' => $e->gastos_procedentes,
+                'conserva_salvamento' => $e->conserva_salvamento,
                 'id_cobertura'     => $e->id_cobertura,
             ] + $e->only(['fecha_inspeccion', 'dictamen', 'causas', 'responsable'])), $e->id_cobertura);
             $nivel = $this->calculo->nivel((float) $calc['monto_final'], (int) $s->id_aseguradora, $calc);
@@ -235,6 +241,9 @@ class EvaluacionService
         $d['costo_remplazo']   = (float) ($d['costo_remplazo'] ?? 0);
         $d['valor_residual']   = (float) ($d['valor_residual'] ?? 0);
         $d['responsable']      = $d['responsable'] ?? null;
+        $d['valor_real_bien']  = isset($d['valor_real_bien']) && $d['valor_real_bien'] !== '' ? (float) $d['valor_real_bien'] : null;
+        $d['gastos_procedentes'] = isset($d['gastos_procedentes']) && $d['gastos_procedentes'] !== '' ? (float) $d['gastos_procedentes'] : null;
+        $d['conserva_salvamento'] = in_array($d['conserva_salvamento'] ?? null, ['aseguradora', 'asegurado'], true) ? $d['conserva_salvamento'] : null;
 
         return $d;
     }

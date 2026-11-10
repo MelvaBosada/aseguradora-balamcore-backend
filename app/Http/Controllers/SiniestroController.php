@@ -149,6 +149,7 @@ class SiniestroController extends Controller
             'cliente_id'           => $cliente?->id,
             'poliza'               => $poliza ? $poliza->numero_poliza : 'Sin póliza',
             'poliza_id'            => $poliza?->id,
+            'poliza_tipo'          => $poliza?->tipo,
             'id_reporte'           => $siniestro->id_reporte,
             'id_empleado'          => $siniestro->id_empleado,
             'ajustador'            => $ajustador ? $ajustador->nombre_completo : 'Sin asignar',
