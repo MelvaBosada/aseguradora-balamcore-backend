@@ -40,7 +40,13 @@ class EmpleadoController extends Controller
         return DB::table('empleados')
             ->leftJoin('usuarios', 'empleados.id_usuario', '=', 'usuarios.id')
             ->leftJoin('roles', 'usuarios.id_rol', '=', 'roles.id')
-            ->select('empleados.*', 'usuarios.id_rol', 'roles.nombre as rol', 'usuarios.ultimo_acceso');
+            ->select(
+                'empleados.*',
+                'usuarios.id_rol',
+                'usuarios.correo as correo_acceso',
+                'roles.nombre as rol',
+                'usuarios.ultimo_acceso'
+            );
     }
 
     private function reglas(): array
@@ -106,17 +112,18 @@ class EmpleadoController extends Controller
         $idAseg = $this->idAseg($request);
 
         $request->validate($this->reglas() + [
-            'password' => 'required|string|min:5',
-            'id_rol'   => 'required|integer',
+            'correo_acceso' => 'required|email|max:100',
+            'password'      => 'required|string|min:5',
+            'id_rol'        => 'required|integer',
         ]);
 
         // El rol tiene que ser de esta aseguradora
         Rol::where('aseguradora_id', $idAseg)->findOrFail($request->id_rol);
 
         abort_if(
-            Usuario::where('correo', $request->correo)->exists(),
+            Usuario::where('correo', $request->correo_acceso)->exists(),
             422,
-            'Ya existe un usuario con ese correo.'
+            'Ya existe un usuario con ese correo de acceso.'
         );
         abort_if(
             Empleado::where('id_aseguradora', $idAseg)->where('curp', strtoupper($request->curp))->exists(),
@@ -126,7 +133,7 @@ class EmpleadoController extends Controller
 
         $empleado = DB::transaction(function () use ($request, $idAseg) {
             $usuario = Usuario::create([
-                'correo'         => $request->correo,
+                'correo'         => $request->correo_acceso,
                 'contrasena'     => Hash::make($request->password),
                 'id_rol'         => $request->id_rol,
                 'id_aseguradora' => $idAseg,
@@ -154,15 +161,16 @@ class EmpleadoController extends Controller
 
         $reglas = collect($this->reglas())->map(fn ($r) => 'sometimes|' . $r)->all();
         $request->validate($reglas + [
-            'password' => 'nullable|string|min:5',
-            'id_rol'   => 'nullable|integer',
+            'correo_acceso' => 'nullable|email|max:100',
+            'password'      => 'nullable|string|min:5',
+            'id_rol'        => 'nullable|integer',
         ]);
 
-        if ($request->filled('correo')) {
+        if ($request->filled('correo_acceso')) {
             abort_if(
-                Usuario::where('correo', $request->correo)->where('id', '!=', $empleado->id_usuario)->exists(),
+                Usuario::where('correo', $request->correo_acceso)->where('id', '!=', $empleado->id_usuario)->exists(),
                 422,
-                'Ya existe un usuario con ese correo.'
+                'Ya existe un usuario con ese correo de acceso.'
             );
         }
 
@@ -191,9 +199,9 @@ class EmpleadoController extends Controller
             $empleado->update($datos);
 
             $cambiosUsuario = [];
-            if ($request->filled('id_rol'))   $cambiosUsuario['id_rol']     = $request->id_rol;
-            if ($request->filled('correo'))   $cambiosUsuario['correo']     = $request->correo;
-            if ($request->filled('password')) $cambiosUsuario['contrasena'] = Hash::make($request->password);
+            if ($request->filled('id_rol'))        $cambiosUsuario['id_rol']     = $request->id_rol;
+            if ($request->filled('correo_acceso')) $cambiosUsuario['correo']     = $request->correo_acceso;
+            if ($request->filled('password'))      $cambiosUsuario['contrasena'] = Hash::make($request->password);
 
             if ($cambiosUsuario) {
                 DB::table('usuarios')->where('id', $empleado->id_usuario)->update($cambiosUsuario);

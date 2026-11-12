@@ -26,7 +26,7 @@ class SiniestroController extends Controller
     private const PRIORIDADES = ['baja', 'media', 'alta', 'urgente'];
 
     /** Con el siniestro en estos estatus ya no se editan sus datos. */
-    private const NO_EDITABLES = ['autorizado', 'en_pago', 'pagado', 'cerrado', 'cancelado'];
+    private const NO_EDITABLES = ['dictaminado', 'autorizado', 'en_pago', 'pagado', 'cerrado', 'cancelado'];
 
     /** Estatus desde los que se puede registrar el arribo del ajustador. */
     private const ESTATUS_ARRIBO = ['abierto', 'documentacion_pendiente', 'en_evaluacion', 'reabierto'];
@@ -143,6 +143,9 @@ class SiniestroController extends Controller
             'tiempo_respuesta_min' => $tiempoRespuesta,
             'puede_registrar_arribo' => $siniestro->fecha_arribo === null && in_array($siniestro->estatus, self::ESTATUS_ARRIBO, true),
             'fecha_creacion'       => $siniestro->fecha_creacion ? $siniestro->fecha_creacion->format('d-m-Y H:i') : '',
+            'fecha_actualizacion'  => $siniestro->fecha_actualizacion
+                ? \Carbon\Carbon::parse($siniestro->fecha_actualizacion)->format('d-m-Y H:i')
+                : '',
             'fecha_cierre'         => $siniestro->fecha_cierre ? $siniestro->fecha_cierre->format('d-m-Y H:i') : '',
             'motivo_cierre'        => $siniestro->motivo_cierre,
             'cliente'              => $cliente ? $cliente->nombre . ' ' . $cliente->apellidos : 'Sin cliente',
@@ -163,6 +166,11 @@ class SiniestroController extends Controller
     /** Pasos que una persona puede dar desde el estatus actual. */
     private function transicionesManuales(string $estatus): array
     {
+        // Con el dictamen en autorización no se ofrece ningún paso manual
+        if ($estatus === 'dictaminado') {
+            return [];
+        }
+
         return array_values(array_filter(
             array_intersect(SiniestroEstadoService::permitidas($estatus), SiniestroEstadoService::MANUALES),
             fn ($destino) => $destino !== 'en_evaluacion' || $estatus === 'rechazado'
@@ -347,7 +355,10 @@ class SiniestroController extends Controller
                 'descripcion'    => $reporte->descripcion,
             ]],
             'reporte_actual' => [
-                'id' => $reporte->id, 'id_poliza' => $poliza->id, 'numero_poliza' => $poliza->numero_poliza,
+                'id'                  => $reporte->id,
+                'id_poliza'           => $poliza->id,
+                'numero_poliza'       => $poliza->numero_poliza,
+                'ubicacion_accidente' => $reporte->ubicacion_accidente,
             ],
         ]);
     }
@@ -412,9 +423,8 @@ class SiniestroController extends Controller
                 $ajustador = $this->ajustadorValido((int) $request->id_empleado, (int) $user->id_aseguradora);
                 abort_if(!$ajustador, 422, 'El ajustador seleccionado no está activo o no pertenece a tu aseguradora.');
             } else {
-                $ajustador = Empleado::ajustadorMenosCargado((int) $user->id_aseguradora)
-                    ?? $user->empleado;
-                abort_if(!$ajustador, 422, 'No hay ajustadores activos. Registra o reactiva a un ajustador para poder abrir siniestros.');
+                $ajustador = Empleado::ajustadorMenosCargado((int) $user->id_aseguradora);
+                abort_if(!$ajustador, 422, 'No hay ajustadores activos (empleados con rol Ajustador). Registra o reactiva uno para abrir siniestros.');
             }
 
             $siniestro = Siniestro::create([
@@ -427,7 +437,8 @@ class SiniestroController extends Controller
                 'prioridad'           => $request->prioridad,
                 'monto_reclamado'     => $request->monto_reclamado,
                 'deducible_aplicado'  => $request->deducible_aplicado,
-                'ubicacion_siniestro' => $request->ubicacion_siniestro,
+                // Si no la escriben, se usa la ubicación que se capturó en el reporte
+                'ubicacion_siniestro' => $request->ubicacion_siniestro ?: $reporte->ubicacion_accidente,
                 'coordenadas'         => $request->coordenadas,
                 'fecha_creacion'      => now(),
                 'fecha_actualizacion' => now(),
@@ -463,9 +474,15 @@ class SiniestroController extends Controller
     }
 
     /** Edita datos del siniestro. El estatus NO se cambia aquí (ver cambiarEstatus) ni el ajustador (ver asignarAjustador). */
-    public function update(Request $request, $id)
-    {
-        $siniestro = Siniestro::visiblePara($request->user())->where('siniestros.id', $id)->firstOrFail();
+    public function update(
+        Request $request,
+        $id,
+        ValidacionPolizaService $validacion,
+        SiniestroEstadoService $estados,
+        DocumentosSiniestroService $docs
+    ) {
+        $user = $request->user();
+        $siniestro = Siniestro::visiblePara($user)->where('siniestros.id', $id)->with('reporte')->firstOrFail();
 
         if (in_array($siniestro->estatus, self::NO_EDITABLES, true)) {
             return response()->json([
@@ -481,12 +498,39 @@ class SiniestroController extends Controller
             'ubicacion_siniestro' => ['sometimes', 'nullable', 'string', 'max:255'],
             'coordenadas'         => ['sometimes', 'nullable', 'string', 'max:100'],
         ]);
-
         if ($validator->fails()) {
             return response()->json(['errors' => $validator->errors()], 422);
         }
+        $datos = $validator->validated();
 
-        $siniestro->update($validator->validated() + ['fecha_actualizacion' => now()]);
+        $cambios = [];
+        foreach ($datos as $campo => $nuevo) {
+            $antes = $siniestro->{$campo};
+            $igual = (is_numeric($antes) && is_numeric($nuevo))
+                ? abs((float) $antes - (float) $nuevo) < 0.005
+                : (string) $antes === (string) $nuevo;
+            if (!$igual) {
+                $cambios[$campo] = ['antes' => $antes, 'despues' => $nuevo];
+            }
+        }
+
+        // Cambiar el tipo cambia qué coberturas amparan y qué documentos se piden: se revalida igual que al abrir
+        if (isset($cambios['tipo'])) {
+            $analisis = $validacion->evaluar($siniestro->reporte, $datos['tipo'], (int) $user->id_aseguradora);
+            abort_if(!empty($analisis['bloqueos']), 422, implode(' ', $analisis['bloqueos']));
+        }
+
+        DB::transaction(function () use ($siniestro, $datos, $cambios, $estados, $docs, $user) {
+            $siniestro->update($datos + ['fecha_actualizacion' => now()]);
+
+            if ($cambios) {
+                $estados->registrarEvento($siniestro, $user->id, 'edicion', 'Datos del siniestro modificados', ['cambios' => $cambios]);
+            }
+            if (isset($cambios['tipo'])) {
+                $docs->generarChecklist($siniestro->fresh());
+                $docs->sincronizar($siniestro->id, $user->id, false);
+            }
+        });
 
         return response()->json(['message' => 'Siniestro actualizado exitosamente', 'siniestro' => $siniestro->fresh()]);
     }
@@ -508,6 +552,14 @@ class SiniestroController extends Controller
 
         $siniestro = Siniestro::visiblePara($user)->where('siniestros.id', $id)->firstOrFail();
         $desde     = $siniestro->estatus;
+
+        if ($desde === 'dictaminado') {
+            return response()->json(['message' => 'El dictamen está en autorización: apruébalo o devuélvelo antes de cambiar el estatus.'], 422);
+        }
+        if ($data['estatus'] === 'cerrado'
+            && Indemnizaciones::where('id_siniestro', $siniestro->id)->whereIn('estatus', ['pendiente', 'autorizada'])->exists()) {
+            return response()->json(['message' => 'Hay una indemnización vigente: regístrala como pagada o cancélala antes de cerrar.'], 422);
+        }
 
         if ($data['estatus'] === 'en_evaluacion' && $desde !== 'rechazado') {
             return response()->json([

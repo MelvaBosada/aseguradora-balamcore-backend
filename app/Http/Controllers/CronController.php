@@ -18,6 +18,10 @@ class CronController extends Controller
         Artisan::call('suscripciones:avisar');
         $avisos = trim(Artisan::output());
 
-        return response()->json(['ok' => true, 'cobros' => $cobros, 'avisos' => $avisos]);
+        // Es idempotente: si el cron corre cada hora, no duplica nada
+        Artisan::call('polizas:marcar-vencidas');
+        $polizas = trim(Artisan::output());
+
+        return response()->json(['ok' => true, 'cobros' => $cobros, 'avisos' => $avisos, 'polizas' => $polizas]);
     }
 }

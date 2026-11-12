@@ -149,6 +149,20 @@ class SiniestroEstadoService
         ]);
     }
 
+    /** Evento en la bitácora que no cambia el estatus (reasignación, arribo, etc.). */
+    public function registrarEvento(Siniestro $s, ?int $idUsuario, string $evento, string $motivo, array $metadata = []): void
+    {
+        SiniestroHistorial::create([
+            'id_aseguradora'  => $s->id_aseguradora,
+            'id_siniestro'    => $s->id,
+            'estado_anterior' => $s->estatus,
+            'estado_nuevo'    => $s->estatus,
+            'id_usuario'      => $idUsuario,
+            'motivo'          => Str::limit($motivo, 255, ''),
+            'metadata'        => ['evento' => $evento] + $metadata,
+        ]);
+    }
+
     private function falla(string $mensaje, string $campo = 'estatus'): never
     {
         throw ValidationException::withMessages([$campo => $mensaje]);

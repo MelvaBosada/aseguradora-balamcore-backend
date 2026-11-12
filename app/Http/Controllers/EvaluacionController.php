@@ -242,9 +242,9 @@ class EvaluacionController extends Controller
     {
         $map = [
             'borrador' => 'Borrador',
-            'en_revision' => 'En revisión',
+            'en_revision' => 'Por autorizar',
             'aprobada' => 'Aprobada',
-            'rechazada' => 'Rechazada'
+            'rechazada' => 'Devuelta'
         ];
         return $map[$estatus] ?? $estatus;
     }

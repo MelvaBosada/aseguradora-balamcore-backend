@@ -204,28 +204,22 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Rutas con {id}
         Route::get('/siniestros/{id}', [SiniestroController::class, 'getDetalleCompleto'])->whereNumber('id');
-        Route::post('/siniestros', [SiniestroController::class, 'store']);
-        Route::post('/siniestros/{id}/estatus', [SiniestroController::class, 'cambiarEstatus']);
-        Route::post('/siniestros/{id}/ajustador', [SiniestroController::class, 'asignarAjustador']);
-        Route::post('/siniestros/{id}/arribo', [SiniestroController::class, 'registrarArribo']);
-        Route::put('/siniestros/{id}', [SiniestroController::class, 'update'])->whereNumber('id');
-        Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy'])->whereNumber('id');
+        Route::post('/siniestros', [SiniestroController::class, 'store'])->middleware('permiso:siniestros');
+        Route::post('/siniestros/{id}/estatus', [SiniestroController::class, 'cambiarEstatus'])->middleware('permiso:siniestros');
+        Route::post('/siniestros/{id}/ajustador', [SiniestroController::class, 'asignarAjustador']); // valida 'siniestros.reasignar' en el controlador
+        Route::post('/siniestros/{id}/arribo', [SiniestroController::class, 'registrarArribo'])->middleware('permiso:siniestros');
+        Route::put('/siniestros/{id}', [SiniestroController::class, 'update'])->whereNumber('id')->middleware('permiso:siniestros');
+        Route::delete('/siniestros/{id}', [SiniestroController::class, 'destroy'])->whereNumber('id')->middleware('permiso:siniestros');
 
         // ── Documentos del siniestro ──────────────────────────
-        // Listado y alta
         Route::get('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'index'])->whereNumber('id');
-        Route::post('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'store'])->whereNumber('id');
-
-        // Acciones sobre el conjunto (rutas fijas, sin {docId})
-        Route::post('/siniestros/{id}/documentos/solicitar', [SiniestroDocumentosController::class, 'solicitar'])->whereNumber('id');   // "+ Pedir documento"
-        Route::post('/siniestros/{id}/documentos/recordar', [SiniestroDocumentosController::class, 'recordar'])->whereNumber('id');     // "Recordar al cliente"
-
-        // Acciones sobre un documento concreto
+        Route::post('/siniestros/{id}/documentos', [SiniestroDocumentosController::class, 'store'])->whereNumber('id')->middleware('permiso:siniestros');
+        Route::post('/siniestros/{id}/documentos/generar', [SiniestroDocumentosController::class, 'generar'])->whereNumber('id')->middleware('permiso:siniestros');
+        Route::post('/siniestros/{id}/documentos/notificar', [SiniestroDocumentosController::class, 'notificar'])->whereNumber('id')->middleware('permiso:siniestros');
         Route::get('/siniestros/{id}/documentos/{docId}/descargar', [SiniestroDocumentosController::class, 'descargar'])->whereNumber(['id', 'docId']);
-        Route::post('/siniestros/{id}/documentos/{docId}/subir', [SiniestroDocumentosController::class, 'subir'])->whereNumber(['id', 'docId']);       // "Subir"
-        Route::post('/siniestros/{id}/documentos/{docId}/revisar', [SiniestroDocumentosController::class, 'revisar'])->whereNumber(['id', 'docId']);   // aprobar / rechazar
-        Route::post('/siniestros/{id}/documentos/{docId}/exentar', [SiniestroDocumentosController::class, 'exentar'])->whereNumber(['id', 'docId']);   // "Exentar"
-        Route::delete('/siniestros/{id}/documentos/{docId}', [SiniestroDocumentosController::class, 'destroy'])->whereNumber(['id', 'docId']);
+        Route::post('/siniestros/{id}/documentos/{docId}/archivo', [SiniestroDocumentosController::class, 'subir'])->whereNumber(['id', 'docId'])->middleware('permiso:siniestros');
+        Route::post('/siniestros/{id}/documentos/{docId}/revisar', [SiniestroDocumentosController::class, 'revisar'])->whereNumber(['id', 'docId'])->middleware('permiso:siniestros');
+        Route::delete('/siniestros/{id}/documentos/{docId}', [SiniestroDocumentosController::class, 'destroy'])->whereNumber(['id', 'docId'])->middleware('permiso:siniestros');
 
         // ── Catálogo de documentos y configuración (escribir exige 'siniestros.configurar') ──
         Route::get('/catalogo-documentos', [CatalogoDocumentosController::class, 'index']);
@@ -280,10 +274,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/evaluaciones/{id}', [EvaluacionController::class, 'show']);
 
         // ── Evaluaciones (flujo) ─────────────────────────────
-        Route::post('/siniestros/{id}/evaluaciones/calcular', [EvaluacionFlujoController::class, 'calcular']);
-        Route::post('/siniestros/{id}/evaluaciones',          [EvaluacionFlujoController::class, 'store']);
-        Route::put('/evaluaciones/{id}',                      [EvaluacionFlujoController::class, 'update']);
-        Route::post('/evaluaciones/{id}/enviar',              [EvaluacionFlujoController::class, 'enviar']);
+        // Capturar y enviar requiere el módulo; aprobar/devolver se valida por nivel en EvaluacionService
+        // resolver y pendientes: SIN permiso:evaluaciones (un supervisor puede tener solo evaluaciones.autorizar)
+        Route::post('/siniestros/{id}/evaluaciones/calcular', [EvaluacionFlujoController::class, 'calcular'])->middleware('permiso:evaluaciones');
+        Route::post('/siniestros/{id}/evaluaciones',          [EvaluacionFlujoController::class, 'store'])->middleware('permiso:evaluaciones');
+        Route::put('/evaluaciones/{id}',                      [EvaluacionFlujoController::class, 'update'])->middleware('permiso:evaluaciones');
+        Route::post('/evaluaciones/{id}/enviar',              [EvaluacionFlujoController::class, 'enviar'])->middleware('permiso:evaluaciones');
         Route::post('/evaluaciones/{id}/resolver',            [EvaluacionFlujoController::class, 'resolver']);
 
         // ── Indemnizaciones (las genera el sistema) ───────────
