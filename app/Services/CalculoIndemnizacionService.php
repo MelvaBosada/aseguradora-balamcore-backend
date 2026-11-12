@@ -19,6 +19,7 @@ use Illuminate\Validation\ValidationException;
  *                       reemplazar / indemnizar = valor del bien (costo de reemplazo)
  *                         - valor del salvamento SOLO si el asegurado se lo queda
  *                           (si se lo queda la aseguradora, se paga completo y ella recupera el salvamento).
+ *    1b. Incumplimientos de la póliza: reducen el daño evaluado (ver IncumplimientosService).
  *    2. Regla proporcional (infraseguro), solo hogar y empresarial y si la aseguradora la tiene activa
  *       y la cobertura no es "primer riesgo":
  *            indemnizable = daño × (suma asegurada / valor real de los bienes)     [si suma < valor real]
@@ -39,13 +40,14 @@ class CalculoIndemnizacionService
 
     public function __construct(
         private PolizaCondicionesService $condiciones,
-        private ValidacionPolizaService $validacion
+        private ValidacionPolizaService $validacion,
+        private IncumplimientosService $incumplimientos // [INCUMPLIMIENTOS]
     ) {
     }
 
     /**
      * @param array $in recomendacion, costo_reparacion, costo_remplazo, valor_residual,
-     *                  valor_real_bien, gastos_procedentes, conserva_salvamento
+     *                  valor_real_bien, gastos_procedentes, conserva_salvamento, incumplimientos
      */
     public function calcular(Siniestro $s, array $in, ?int $idCoberturaForzada = null): array
     {
@@ -69,6 +71,13 @@ class CalculoIndemnizacionService
             ? $in['conserva_salvamento']
             : $cfg->salvamento_default;
 
+        $origenValorReal = $valorReal > 0 ? 'capturado' : null;
+        if ($valorReal <= 0 && in_array($ramo, self::RAMOS_PROPORCIONAL, true)) {
+            // Dato de la póliza: valor de los bienes asegurados (no se captura en el dictamen)
+            $valorReal       = $this->valorBienesPoliza($poliza);
+            $origenValorReal = $valorReal > 0 ? 'poliza' : null;
+        }
+
         $this->validarEntradas($ramo, $rec, $rep, $rem, $gastos);
 
         $suma       = (float) $cond['suma_asegurada'];
@@ -91,7 +100,18 @@ class CalculoIndemnizacionService
         }
         $evaluado = round($evaluado, 2);
 
-        $advertencias = [];
+        // ── [INCUMPLIMIENTOS] Reducción del daño evaluado por incumplimientos de la póliza
+        $evaluadoBruto = $evaluado;
+        $inc = ['lineas' => [], 'reduccion' => 0.0, 'evaluado_final' => $evaluado,
+                'nivel_minimo' => 'auto', 'sin_resolver' => false, 'advertencias' => []];
+
+        if ($rec !== 'rechazar') {
+            $inc = $this->incumplimientos->procesar($reporte, $cfg, (array) ($in['incumplimientos'] ?? []), $evaluado);
+            $evaluado = $inc['evaluado_final'];
+        }
+
+        $advertencias = $inc['advertencias'];
+
         $banderas     = $this->validacion->banderas($poliza, $cond, $ocurrio, $s->tipo, $s->id);
         if (!$cond['reconstruible']) {
             $advertencias[] = 'Hay endosos posteriores al hecho sin detalle de cambios: confirma las condiciones de la póliza.';
@@ -111,7 +131,12 @@ class CalculoIndemnizacionService
             'gastos_procedentes'  => $gastos,
             'conserva_salvamento' => $conserva,
             'salvamento_descontado' => round($salvamentoDescontado, 2),
-            'valor_real_bien'     => $valorReal,
+            'valor_real_bien'        => $valorReal,
+            'valor_real_bien_origen' => $origenValorReal,
+            'monto_evaluado_bruto'      => $evaluadoBruto,                // [INCUMPLIMIENTOS]
+            'incumplimientos'           => $inc['lineas'],                // [INCUMPLIMIENTOS]
+            'reduccion_incumplimientos' => $inc['reduccion'],             // [INCUMPLIMIENTOS]
+            'nivel_minimo'              => $inc['nivel_minimo'],          // [INCUMPLIMIENTOS]
             'monto_evaluado'      => $evaluado,
             'monto_reclamado'     => (float) $s->monto_reclamado,
             'suma_asegurada'      => $suma,
@@ -149,6 +174,12 @@ class CalculoIndemnizacionService
 
         $sinCobertura = $candidatas->isEmpty();
         if ($sinCobertura) {
+            $contratadas = DB::table('polizas_x_cobertura')->where('id_poliza', $poliza->id)->count();
+            if ($contratadas > 0) {
+                // Hay coberturas contratadas pero ninguna ampara este tipo: no se paga "sin deducible"
+                throw ValidationException::withMessages(['id_cobertura' =>
+                    "Ninguna cobertura contratada y vigente ampara siniestros de tipo \"{$s->tipo}\". Si no está amparado, dictamina \"Rechazar\"."]);
+            }
             $candidatas     = collect([null]);
             $advertencias[] = 'La póliza no tiene cobertura asignada: se calculó sin deducible ni topes de cobertura.';
         }
@@ -185,6 +216,7 @@ class CalculoIndemnizacionService
     /**
      * Nivel que debe autorizar el dictamen: auto | supervisor | gerente.
      * Nunca es "auto" si hay señales de riesgo, si falta cobertura o si se recomienda rechazar.
+     * Los incumplimientos pueden imponer un nivel mínimo (nivel_minimo).
      */
     public function nivel(float $monto, int $idAseguradora, array $calculo): string
     {
@@ -193,6 +225,13 @@ class CalculoIndemnizacionService
         $nivel = $monto <= $cfg->monto_auto_hasta
             ? 'auto'
             : ($monto <= $cfg->monto_supervisor_hasta ? 'supervisor' : 'gerente');
+
+        // [INCUMPLIMIENTOS] Nivel mínimo impuesto por los incumplimientos
+        $orden  = ['auto' => 0, 'supervisor' => 1, 'gerente' => 2];
+        $minimo = $calculo['nivel_minimo'] ?? 'auto';
+        if (($orden[$minimo] ?? 0) > $orden[$nivel]) {
+            $nivel = $minimo;
+        }
 
         $forzar = !empty($calculo['sin_cobertura'])
             || empty($calculo['condiciones']['reconstruible'])
@@ -234,14 +273,12 @@ class CalculoIndemnizacionService
         // ── Regla proporcional (infraseguro)
         $primerRiesgo = (bool) ($cob?->primer_riesgo);
         $factor       = 1.0;
+        $avisoInfra   = [];
 
         if (in_array($ramo, self::RAMOS_PROPORCIONAL, true) && $cfg->aplicar_infraseguro && !$primerRiesgo) {
             if ($ctx['valor_real'] <= 0) {
-                throw ValidationException::withMessages([
-                    'valor_real_bien' => 'Captura el valor real de los bienes asegurados (reposición a la fecha del siniestro): se necesita para revisar si hay infraseguro.',
-                ]);
-            }
-            if ($suma > 0 && $suma < $ctx['valor_real']) {
+                $avisoInfra[] = 'La póliza no tiene bienes con valor registrado: no se pudo revisar el infraseguro.';
+            } elseif ($suma > 0 && $suma < $ctx['valor_real']) {
                 $factor = $suma / $ctx['valor_real'];
             }
         }
@@ -309,11 +346,17 @@ class CalculoIndemnizacionService
             'coaseguro'             => $coaseguro,
             'topes'                 => $topes,
             'monto_final'           => round(max(0, $pago), 2),
-            'advertencias'          => $factor < 1
-                ? [sprintf('Infraseguro: la suma asegurada ($%s) es menor al valor real ($%s). Se pagó el %.1f%% del daño.',
+            'advertencias'          => array_merge($avisoInfra, $factor < 1
+                ? [sprintf('Infraseguro: la suma asegurada ($%s) es menor al valor de los bienes de la póliza ($%s). Se pagó el %.1f%% del daño.',
                     number_format($suma, 2), number_format($ctx['valor_real'], 2), $factor * 100)]
-                : [],
+                : []),
         ];
+    }
+
+    /** Valor de TODOS los bienes asegurados en la póliza (base de la regla proporcional). */
+    private function valorBienesPoliza(Poliza $poliza): float
+    {
+        return (float) DB::table('bienes')->where('id_poliza', $poliza->id)->sum('valor');
     }
 
     /** Valor de los bienes dañados del siniestro; si no hay, el de los bienes asegurados en la póliza. */

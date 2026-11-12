@@ -29,12 +29,16 @@ class PolizaController extends Controller
     /**
      * Datos que modifican el CONTRATO: una póliza emitida solo se cambia con un endoso.
      * (IVA y prima total no se capturan: se recalculan.)  El ramo (tipo) nunca cambia.
+     * El día de pago NO es contractual: se puede cambiar sin endoso.
      */
     private const CAMPOS_CONTRACTUALES = [
         'suma_asegurada', 'fecha_inicio', 'fecha_fin', 'prima_neta', 'derecho_poliza', 'forma_pago',
     ];
 
     private const FORMAS_PAGO = ['contado', 'mensual', 'trimestral', 'semestral', 'anual'];
+
+    /** Formas de pago en las que existe día de pago. */
+    private const FORMAS_CON_DIA_PAGO = ['mensual', 'trimestral', 'semestral'];
 
     /** Límite de los PDF en KB (2 MB, igual que en el resto del sistema). */
     private const MAX_PDF_KB = 2048;
@@ -67,6 +71,7 @@ class PolizaController extends Controller
         'prima_neta'         => 'prima neta',
         'derecho_poliza'     => 'derecho de póliza',
         'forma_pago'         => 'forma de pago',
+        'dia_pago'           => 'día de pago',
         'observaciones'      => 'observaciones',
         'coberturas_ids'     => 'coberturas',
         'descripcion_endoso' => 'descripción del endoso',
@@ -100,6 +105,9 @@ class PolizaController extends Controller
             'max'      => [
                 'numeric' => 'La :attribute es demasiado grande.',
                 'string'  => 'La :attribute no debe pasar de :max caracteres.',
+            ],
+            'between'  => [
+                'numeric' => 'El :attribute debe estar entre :min y :max.',
             ],
             'gt'       => [
                 'numeric' => 'La :attribute debe ser mayor a 0.',
@@ -302,6 +310,7 @@ class PolizaController extends Controller
                     'prima_neta' => 'required|numeric|min:0|max:9999999999.99',
                     'derecho_poliza' => 'required|numeric|min:0|max:9999999999.99',
                     'forma_pago' => ['required', Rule::in(self::FORMAS_PAGO)],
+                    'dia_pago' => 'nullable|integer|between:1,28',
                     'observaciones' => 'nullable|string|max:255',
                     'coberturas_ids' => 'nullable|array',
                     'coberturas_ids.*' => 'integer',
@@ -366,7 +375,11 @@ class PolizaController extends Controller
                     'prima_total' => $fin['prima_total'],
                     'forma_pago' => $request->forma_pago,
                     'observaciones' => $request->observaciones,
-                ], $this->calendarioDePagos($request->forma_pago, $request->fecha_inicio)));
+                ], $this->calendarioDePagos(
+                    $request->forma_pago,
+                    $request->fecha_inicio,
+                    $request->filled('dia_pago') ? (int) $request->dia_pago : null
+                )));
 
                 $this->sincronizarBienes($poliza, $bienesIds, $precios);
                 $this->coberturas->sincronizar($poliza, $coberturasIds);
@@ -432,6 +445,13 @@ class PolizaController extends Controller
                 (int) $poliza->id_aseguradora
             );
 
+            // Quién emitió la póliza (se manda el nombre, nunca el id)
+            $empleado = $poliza->id_empleado
+                ? Empleado::where('id', $poliza->id_empleado)
+                    ->where('id_aseguradora', $user->id_aseguradora)
+                    ->first()
+                : null;
+
             return response()->json([
                 'id' => $poliza->id,
                 'nPoliza' => $poliza->numero_poliza,
@@ -439,6 +459,11 @@ class PolizaController extends Controller
                 'id_cliente' => $poliza->id_cliente,
                 'fechaInicio' => $poliza->fecha_inicio,
                 'fechaFinal' => $poliza->fecha_fin,
+                'fechaEmision' => $poliza->fecha_emision ? Carbon::parse($poliza->fecha_emision)->toDateString() : null,
+                'empleado' => $empleado ? trim($empleado->nombre . ' ' . $empleado->apellidos) : null,
+                'diaPago' => $poliza->dia_pago,
+                'fechaPrimerPago' => $poliza->fecha_primer_pago,
+                'siguientePago' => $poliza->siguiente_pago,
                 'estatus' => $this->traducirEstatus($this->estaVencida($poliza) ? 'vencida' : $poliza->estatus),
                 'sumaAsegurada' => $poliza->suma_asegurada,
                 'formaPago' => $poliza->forma_pago,
@@ -513,6 +538,7 @@ class PolizaController extends Controller
                     'prima_neta' => 'sometimes|numeric|min:0|max:9999999999.99',
                     'derecho_poliza' => 'sometimes|numeric|min:0|max:9999999999.99',
                     'forma_pago' => ['sometimes', Rule::in(self::FORMAS_PAGO)],
+                    'dia_pago' => 'nullable|integer|between:1,28',
                     'observaciones' => 'nullable|string|max:255',
                     'coberturas_ids' => 'nullable|array',
                     'coberturas_ids.*' => 'integer',
@@ -689,6 +715,35 @@ class PolizaController extends Controller
                     ]);
                 }
 
+                // ── Día de pago: es operativo (no contractual), se cambia sin endoso
+                if (
+                    $request->filled('dia_pago')
+                    && in_array($nuevos['forma_pago'], self::FORMAS_CON_DIA_PAGO, true)
+                    && !$this->estaVencida($poliza)
+                ) {
+                    $diaNuevo = (int) $request->input('dia_pago');
+                    $diaAntes = $poliza->dia_pago;
+
+                    if ((int) $diaAntes !== $diaNuevo) {
+                        $extra = ['dia_pago' => $diaNuevo];
+
+                        if ($poliza->siguiente_pago) {
+                            $sig = Carbon::parse($poliza->siguiente_pago);
+                            $extra['siguiente_pago'] = $sig->day(min($diaNuevo, $sig->daysInMonth))->toDateString();
+                        }
+
+                        $poliza->update($extra);
+
+                        $this->bitacora->registrar(
+                            $poliza->id,
+                            $idAseg,
+                            'modificada',
+                            'Día de pago cambiado de ' . ($diaAntes ?: '—') . " a {$diaNuevo}",
+                            ['dia_pago' => ['antes' => $diaAntes, 'despues' => $diaNuevo]]
+                        );
+                    }
+                }
+
                 if ($request->hasFile('documento')) {
                     $this->adjuntarDocumento($poliza, $request->file('documento'));
                     $this->bitacora->registrar(
@@ -722,7 +777,7 @@ class PolizaController extends Controller
         }
     }
 
-        /** POST /polizas/{id}/cancelar  { motivo } — la póliza NO se borra: queda cancelada y de solo consulta. */
+    /** POST /polizas/{id}/cancelar  { motivo } — la póliza NO se borra: queda cancelada y de solo consulta. */
     public function cancelar(Request $request, $id)
     {
         try {
@@ -1005,20 +1060,32 @@ class PolizaController extends Controller
     /**
      * Calendario de pagos al crear la póliza:
      *  - primer pago: el día de inicio de vigencia
-     *  - día de pago: solo en mensual, trimestral y semestral (máximo 28 para que exista en todos los meses)
-     *  - siguiente pago: inicio + 1, 3, 6 o 12 meses; en contado no hay
+     *  - día de pago: el que elige el usuario (1-28); si no elige, el día de inicio (máx. 28).
+     *    Solo aplica en mensual, trimestral y semestral
+     *  - siguiente pago: inicio + 1, 3, 6 o 12 meses, ajustado al día de pago; en contado no hay
      */
-    private function calendarioDePagos(string $formaPago, string $fechaInicio): array
+    private function calendarioDePagos(string $formaPago, string $fechaInicio, ?int $diaPago = null): array
     {
         $inicio = Carbon::parse($fechaInicio);
         $meses = PolizaFinanzasService::MESES_POR_FORMA_PAGO[$formaPago] ?? null;
 
+        $dia = in_array($formaPago, self::FORMAS_CON_DIA_PAGO, true)
+            ? ($diaPago ?: min($inicio->day, 28))
+            : null;
+
+        $siguiente = null;
+        if ($meses) {
+            $fecha = $inicio->copy()->addMonthsNoOverflow($meses);
+            if ($dia) {
+                $fecha->day(min($dia, $fecha->daysInMonth));
+            }
+            $siguiente = $fecha->toDateString();
+        }
+
         return [
             'fecha_primer_pago' => $inicio->toDateString(),
-            'dia_pago' => in_array($formaPago, ['mensual', 'trimestral', 'semestral'], true)
-                ? min($inicio->day, 28)
-                : null,
-            'siguiente_pago' => $meses ? $inicio->copy()->addMonthsNoOverflow($meses)->toDateString() : null,
+            'dia_pago' => $dia,
+            'siguiente_pago' => $siguiente,
         ];
     }
 

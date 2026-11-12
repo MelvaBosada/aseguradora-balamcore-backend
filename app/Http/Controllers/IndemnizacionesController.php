@@ -28,8 +28,9 @@ class IndemnizacionesController extends Controller
             ->join('siniestros as s', 'i.id_siniestro', '=', 's.id')
             ->join('reportes as r', 's.id_reporte', '=', 'r.id')
             ->leftJoin('polizas as p', 'r.id_poliza', '=', 'p.id')
-            ->join('evaluaciones as ev', 'i.id_evaluaciones', '=', 'ev.id')
-            ->join('empleados as e', 'ev.id_empleado', '=', 'e.id')
+            ->leftJoin('evaluaciones as ev', 'i.id_evaluaciones', '=', 'ev.id')
+            ->leftJoin('empleados as e', 'ev.id_empleado', '=', 'e.id')
+            ->leftJoin('clientes as c', 'p.id_cliente', '=', 'c.id')
             ->where('s.id_aseguradora', $user->id_aseguradora);
 
         if (!$user->tienePermiso('indemnizaciones.pagar')) {
@@ -42,6 +43,12 @@ class IndemnizacionesController extends Controller
             'p.numero_poliza as poliza_numero',
             'r.telefono_reportante as asegurado_tel',
             'r.ubicacion_accidente as lugar',
+            'r.fecha_ocurrencia',
+            'c.rfc as asegurado_rfc',
+            'c.domicilio as asegurado_domicilio',
+            'c.correo as asegurado_correo',
+            'c.nombre as cliente_nombre',
+            'c.apellidos as cliente_apellidos',
             's.numero_siniestro',
             's.estatus as siniestro_estatus',
             's.tipo as tipo_siniestro',

@@ -73,6 +73,7 @@ class IndemnizacionService
                 'desglose'           => Arr::only($calculo, [
                     'monto_evaluado', 'cobertura', 'deducible', 'porcentaje_cobertura', 'coaseguro',
                     'topes', 'monto_bruto', 'pagos_siniestro', 'monto_final',
+                    'incumplimientos', 'reduccion_incumplimientos', // [INCUMPLIMIENTOS]
                 ]),
             ]);
 
@@ -179,6 +180,9 @@ class IndemnizacionService
                 $this->estados->transicionar($s->id, 'autorizado', $user->id, Str::limit('Pago cancelado: ' . $motivo, 255, ''), [
                     'id_indemnizacion' => $i->id,
                 ]);
+            } else {
+                $this->estados->registrarEvento($s, $user->id, 'indemnizacion_cancelada',
+                    Str::limit('Indemnización anulada: ' . $motivo, 255, ''), ['id_indemnizacion' => $i->id]);
             }
 
             return $i->fresh();

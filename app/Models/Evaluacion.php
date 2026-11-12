@@ -36,6 +36,7 @@ class Evaluacion extends Model
         'valor_real_bien',
         'gastos_procedentes',
         'conserva_salvamento',
+        'incumplimientos',
     ];
 
     protected $casts = [
@@ -51,6 +52,7 @@ class Evaluacion extends Model
         'valor_real_bien'    => 'decimal:2',
         'gastos_procedentes' => 'decimal:2',
         'calculo'            => 'array',
+        'incumplimientos' => 'array',
     ];
 
     public function siniestro()

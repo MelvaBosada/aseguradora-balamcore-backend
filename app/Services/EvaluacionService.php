@@ -34,8 +34,9 @@ class EvaluacionService
         $calc  = $this->calculo->calcular($s, $datos, $datos['id_cobertura'] ?? null);
 
         return [
-            'calculo' => $calc,
-            'nivel'   => $this->calculo->nivel((float) $calc['monto_final'], (int) $s->id_aseguradora, $calc),
+            'calculo'  => $calc,
+            'nivel'    => $this->calculo->nivel((float) $calc['monto_final'], (int) $s->id_aseguradora, $calc),
+            'catalogo' => \App\Support\Incumplimientos::paraFormulario(), // [INCUMPLIMIENTOS]
         ];
     }
 
@@ -48,6 +49,8 @@ class EvaluacionService
                 $this->falla('El siniestro debe estar "En evaluación" (hoy: ' . SiniestroEstadoService::etiqueta($s->estatus)
                     . '). Primero se deben aprobar sus documentos obligatorios.');
             }
+
+            $esNuevo = $evaluacion === null;
 
             if ($evaluacion) {
                 $evaluacion = Evaluacion::whereKey($evaluacion->id)->lockForUpdate()->firstOrFail();
@@ -74,6 +77,7 @@ class EvaluacionService
                 'valor_real_bien'    => $datos['valor_real_bien'],
                 'gastos_procedentes' => $datos['gastos_procedentes'],
                 'conserva_salvamento' => $datos['conserva_salvamento'],
+                'incumplimientos'    => $datos['incumplimientos'], // [INCUMPLIMIENTOS]
                 'monto_evaluado'     => $calc['monto_evaluado'],
                 'monto_recomendado'  => $calc['monto_final'],
                 'id_cobertura'       => $calc['id_cobertura'],
@@ -93,6 +97,12 @@ class EvaluacionService
             }
 
             $s->update(['deducible_aplicado' => $calc['deducible'], 'fecha_actualizacion' => now()]);
+
+            $this->estados->registrarEvento($s, $user->id, $esNuevo ? 'dictamen_creado' : 'dictamen_editado',
+                "Dictamen #{$evaluacion->id} en borrador", [
+                    'id_evaluacion' => $evaluacion->id, 'recomendacion' => $datos['recomendacion'],
+                    'monto' => (float) $calc['monto_final'], 'nivel' => $nivel,
+                ]);
 
             return $evaluacion->fresh();
         });
@@ -125,6 +135,7 @@ class EvaluacionService
                 'valor_real_bien'  => $e->valor_real_bien,
                 'gastos_procedentes' => $e->gastos_procedentes,
                 'conserva_salvamento' => $e->conserva_salvamento,
+                'incumplimientos'  => $e->incumplimientos, // [INCUMPLIMIENTOS] sin esto el monto cambiaría en silencio al enviar
                 'id_cobertura'     => $e->id_cobertura,
             ] + $e->only(['fecha_inspeccion', 'dictamen', 'causas', 'responsable'])), $e->id_cobertura);
             $nivel = $this->calculo->nivel((float) $calc['monto_final'], (int) $s->id_aseguradora, $calc);
@@ -167,9 +178,8 @@ class EvaluacionService
             }
 
             abort_if(
-                !$this->puedeAutorizar($user, (string) $e->nivel_autorizacion),
-                403,
-                'No tienes permiso para autorizar este monto (nivel: ' . $e->nivel_autorizacion . ').'
+                !$this->puedeAutorizar($user, (string) ($e->nivel_autorizacion ?: 'supervisor')),
+                403, 'No tienes permiso para autorizar este monto.'
             );
             abort_if(
                 $user->empleado && (int) $user->empleado->id === (int) $e->id_empleado,
@@ -198,6 +208,16 @@ class EvaluacionService
 
             return $e->fresh();
         });
+    }
+
+    /** Permiso mínimo que pide cada nivel de autorización (null = no requiere a nadie, ej. "auto"). */
+    public static function permisoRequerido(string $nivel): ?string
+    {
+        return match ($nivel) {
+            'supervisor' => 'evaluaciones.autorizar',
+            'gerente'    => 'evaluaciones.autorizar_alto',
+            default      => null,
+        };
     }
 
     public function puedeAutorizar(Usuario $user, string $nivel): bool
@@ -244,6 +264,7 @@ class EvaluacionService
         $d['valor_real_bien']  = isset($d['valor_real_bien']) && $d['valor_real_bien'] !== '' ? (float) $d['valor_real_bien'] : null;
         $d['gastos_procedentes'] = isset($d['gastos_procedentes']) && $d['gastos_procedentes'] !== '' ? (float) $d['gastos_procedentes'] : null;
         $d['conserva_salvamento'] = in_array($d['conserva_salvamento'] ?? null, ['aseguradora', 'asegurado'], true) ? $d['conserva_salvamento'] : null;
+        $d['incumplimientos']  = array_values(array_filter((array) ($d['incumplimientos'] ?? []), 'is_array')); // [INCUMPLIMIENTOS]
 
         return $d;
     }
