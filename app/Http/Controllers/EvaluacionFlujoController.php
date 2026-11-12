@@ -35,6 +35,13 @@ class EvaluacionFlujoController extends Controller
             'gastos_procedentes' => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
             'conserva_salvamento' => ['nullable', Rule::in(['aseguradora', 'asegurado'])],
             'id_cobertura'     => ['nullable', 'integer'],
+            // [INCUMPLIMIENTOS]
+            'incumplimientos'               => ['nullable', 'array', 'max:10'],
+            'incumplimientos.*.codigo'      => ['required', 'string', Rule::in(array_keys(\App\Support\Incumplimientos::catalogo()))],
+            'incumplimientos.*.aplica'      => ['required', 'boolean'],
+            'incumplimientos.*.tipo_ajuste' => ['nullable', Rule::in(['porcentaje', 'monto'])],
+            'incumplimientos.*.valor'       => ['nullable', 'numeric', 'min:0', 'max:9999999999.99'],
+            'incumplimientos.*.motivo'      => ['nullable', 'string', 'max:255'],
         ];
     }
 
@@ -70,9 +77,11 @@ class EvaluacionFlujoController extends Controller
             'valor_real_bien'    => $e->valor_real_bien,
             'gastos_procedentes' => $e->gastos_procedentes,
             'conserva_salvamento' => $e->conserva_salvamento,
+            'incumplimientos'    => $e->incumplimientos, // [INCUMPLIMIENTOS]
             'monto_evaluado'     => $e->monto_evaluado,
             'monto_recomendado'  => $e->monto_recomendado,
             'nivel_autorizacion' => $e->nivel_autorizacion,
+            'permiso_requerido'  => EvaluacionService::permisoRequerido((string) $e->nivel_autorizacion),
             'id_cobertura'       => $e->id_cobertura,
             'calculo'            => $e->calculo,
             'fecha_envio'        => $e->fecha_envio?->format('Y-m-d H:i'),
@@ -164,14 +173,18 @@ class EvaluacionFlujoController extends Controller
         abort_if(empty($niveles), 403, 'No tienes permiso para autorizar dictámenes.');
 
         $query = Evaluacion::where('estatus', 'en_revision')
-            ->whereIn('nivel_autorizacion', $niveles)
+            ->where(function ($q) use ($niveles) {
+                $q->whereIn('nivel_autorizacion', $niveles);
+                if (in_array('supervisor', $niveles, true)) {
+                    $q->orWhereNull('nivel_autorizacion'); // dictámenes sin nivel se tratan como supervisor
+                }
+            })
             ->whereHas('siniestro', fn ($q) => $q->where('siniestros.id_aseguradora', $user->id_aseguradora))
             ->with(['siniestro:id,numero_siniestro,tipo', 'empleado:id,nombre,apellidos'])
             ->orderBy('fecha_envio');
 
-        if ($user->empleado) {
-            $query->where('id_empleado', '!=', $user->empleado->id); // no autorizas lo tuyo
-        }
+        // ya NO se excluyen los propios: se listan y se marcan
+        $miEmpleado = $user->empleado?->id;
 
         return response()->json($query->get()->map(fn ($e) => [
             'id'                 => $e->id,
@@ -182,8 +195,10 @@ class EvaluacionFlujoController extends Controller
             'recomendacion'      => $e->recomendacion,
             'monto_recomendado'  => $e->monto_recomendado,
             'nivel_autorizacion' => $e->nivel_autorizacion,
+            'permiso_requerido'  => EvaluacionService::permisoRequerido((string) $e->nivel_autorizacion),
             'advertencias'       => $e->calculo['advertencias'] ?? [],
             'fecha_envio'        => $e->fecha_envio?->format('Y-m-d H:i'),
+            'propio'             => $miEmpleado && (int) $e->id_empleado === (int) $miEmpleado,
         ])->values());
     }
 }

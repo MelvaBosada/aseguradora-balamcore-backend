@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Empleado extends Model
 {
@@ -53,10 +54,17 @@ class Empleado extends Model
      */
     public static function ajustadoresActivos(int $idAseguradora): Builder
     {
+        // Fuente de verdad: el rol del usuario ligado al empleado
+        $usuariosAjustador = DB::table('usuarios')
+            ->join('roles', 'usuarios.id_rol', '=', 'roles.id')
+            ->where('roles.aseguradora_id', $idAseguradora)
+            ->whereRaw('LOWER(roles.nombre) = ?', ['ajustador'])
+            ->select('usuarios.id');
+
         return static::query()
             ->where('id_aseguradora', $idAseguradora)
-            ->where('tipo_empleado', 'ajustador')
-            ->where('estado_laboral', 'activo');
+            ->where('estado_laboral', 'activo')
+            ->whereIn('id_usuario', $usuariosAjustador);
     }
 
     /**
