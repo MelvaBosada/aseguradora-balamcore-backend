@@ -33,7 +33,7 @@ COPY . .
 RUN apk add --no-cache libzip-dev && docker-php-ext-install zip
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# <-- NUEVO: límites de subida de PHP
+# Límites de subida de PHP
 RUN { \
       echo "upload_max_filesize=50M"; \
       echo "post_max_size=55M"; \
@@ -41,7 +41,7 @@ RUN { \
       echo "max_execution_time=120"; \
     } > /usr/local/etc/php/conf.d/uploads.ini
 
-# <-- NUEVO: crear carpetas de almacenamiento y las temporales de Nginx con permisos correctos
+# Carpetas de almacenamiento de Laravel y carpetas temporales de Nginx con permisos correctos
 RUN mkdir -p \
         /var/www/html/storage/app/private/documentos \
         /var/www/html/storage/app/private/evidencias \
@@ -52,14 +52,15 @@ RUN mkdir -p \
         /var/www/html/storage/framework/views \
         /var/www/html/storage/logs \
         /var/www/html/bootstrap/cache \
-        /tmp/nginx/client_body \
-        /tmp/nginx/fastcgi \
-        /tmp/nginx/proxy \
-        /tmp/nginx/uwsgi \
-        /tmp/nginx/scgi \
-    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /tmp/nginx \
+        /var/lib/nginx/tmp/client_body \
+        /var/lib/nginx/tmp/fastcgi \
+        /var/lib/nginx/tmp/proxy \
+        /var/lib/nginx/tmp/uwsgi \
+        /var/lib/nginx/tmp/scgi \
+        /var/log/nginx \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /var/lib/nginx /var/log/nginx \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
-    && chmod -R 777 /tmp/nginx
+    && chmod -R 755 /var/lib/nginx
 
 # ==========================================
 # CREACIÓN DE ARCHIVOS DE CONFIGURACIÓN
@@ -81,15 +82,15 @@ http {
     sendfile on;
     keepalive_timeout 65;
 
-    # NUEVO: tamaño máximo de subida (evita el 413)
+    # Tamaño máximo de subida (evita el 413)
     client_max_body_size 50M;
 
-    # NUEVO: carpetas temporales con permisos para www-data (evita el 500 al subir archivos)
-    client_body_temp_path /tmp/nginx/client_body;
-    fastcgi_temp_path     /tmp/nginx/fastcgi;
-    proxy_temp_path       /tmp/nginx/proxy;
-    uwsgi_temp_path       /tmp/nginx/uwsgi;
-    scgi_temp_path        /tmp/nginx/scgi;
+    # Carpetas temporales con permisos para www-data (evita el 500 al subir archivos)
+    client_body_temp_path /var/lib/nginx/tmp/client_body;
+    fastcgi_temp_path     /var/lib/nginx/tmp/fastcgi;
+    proxy_temp_path       /var/lib/nginx/tmp/proxy;
+    uwsgi_temp_path       /var/lib/nginx/tmp/uwsgi;
+    scgi_temp_path        /var/lib/nginx/tmp/scgi;
 
     server {
         listen 8000;
@@ -112,7 +113,7 @@ http {
             fastcgi_pass 127.0.0.1:9000;
             fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
             include fastcgi_params;
-            fastcgi_read_timeout 120;   # NUEVO
+            fastcgi_read_timeout 120;
         }
 
         location ~ /\.ht {
