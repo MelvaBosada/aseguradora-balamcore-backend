@@ -33,8 +33,33 @@ COPY . .
 RUN apk add --no-cache libzip-dev && docker-php-ext-install zip
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Configurar permisos correctos para Laravel
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# <-- NUEVO: límites de subida de PHP
+RUN { \
+      echo "upload_max_filesize=50M"; \
+      echo "post_max_size=55M"; \
+      echo "memory_limit=256M"; \
+      echo "max_execution_time=120"; \
+    } > /usr/local/etc/php/conf.d/uploads.ini
+
+# <-- NUEVO: crear carpetas de almacenamiento y las temporales de Nginx con permisos correctos
+RUN mkdir -p \
+        /var/www/html/storage/app/private/documentos \
+        /var/www/html/storage/app/private/evidencias \
+        /var/www/html/storage/app/private/polizas \
+        /var/www/html/storage/app/public \
+        /var/www/html/storage/framework/cache/data \
+        /var/www/html/storage/framework/sessions \
+        /var/www/html/storage/framework/views \
+        /var/www/html/storage/logs \
+        /var/www/html/bootstrap/cache \
+        /tmp/nginx/client_body \
+        /tmp/nginx/fastcgi \
+        /tmp/nginx/proxy \
+        /tmp/nginx/uwsgi \
+        /tmp/nginx/scgi \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache /tmp/nginx \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 777 /tmp/nginx
 
 # ==========================================
 # CREACIÓN DE ARCHIVOS DE CONFIGURACIÓN
@@ -55,6 +80,16 @@ http {
     default_type application/octet-stream;
     sendfile on;
     keepalive_timeout 65;
+
+    # NUEVO: tamaño máximo de subida (evita el 413)
+    client_max_body_size 50M;
+
+    # NUEVO: carpetas temporales con permisos para www-data (evita el 500 al subir archivos)
+    client_body_temp_path /tmp/nginx/client_body;
+    fastcgi_temp_path     /tmp/nginx/fastcgi;
+    proxy_temp_path       /tmp/nginx/proxy;
+    uwsgi_temp_path       /tmp/nginx/uwsgi;
+    scgi_temp_path        /tmp/nginx/scgi;
 
     server {
         listen 8000;
@@ -77,6 +112,7 @@ http {
             fastcgi_pass 127.0.0.1:9000;
             fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
             include fastcgi_params;
+            fastcgi_read_timeout 120;   # NUEVO
         }
 
         location ~ /\.ht {
